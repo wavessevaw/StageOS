@@ -58,8 +58,10 @@ jobs:
         run: |
           $env:STAGEOS_HOME = Join-Path $env:RUNNER_TEMP 'StageOS-selftest'
           & ./artifacts/StageOS-Portable/runtime/python.exe ./artifacts/StageOS-Portable/app/windows_desktop.py --self-test
-          if ($LASTEXITCODE -ne 0) { throw 'Portable self-test failed' }
-          Get-Content (Join-Path $env:STAGEOS_HOME 'selftest.json')
+          $selftestExit = $LASTEXITCODE
+          Get-Content (Join-Path $env:STAGEOS_HOME 'selftest.json') -ErrorAction SilentlyContinue
+          Get-Content (Join-Path $env:STAGEOS_HOME 'startup-error.log') -ErrorAction SilentlyContinue
+          if ($selftestExit -ne 0) { throw 'Portable self-test failed' }
       - name: Проверка загрузки оконной библиотеки
         shell: pwsh
         run: |
