@@ -1,0 +1,11 @@
+{
+  "name": "stageos-desktop",
+  "private": true,
+  "version": "1.0.0-rc.1",
+  "scripts": {
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0"
+  }
+}

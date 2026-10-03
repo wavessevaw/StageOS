@@ -1,0 +1,1 @@
+PASS: PE32+ x64 Windows GUI launcher compiled with Zig 0.16.0. Windows execution NOT_TESTED.

@@ -1,0 +1,71 @@
+name: Проверка StageOS
+on:
+  push:
+    branches: [main, codex/release-readiness]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  core-and-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: python -m pip install -r requirements-lock.txt ruff
+      - run: python -m ruff check backend tests windows/windows_desktop.py --select E9,F63,F7,F82
+      - run: python -m pytest tests -q
+      - run: npm ci --prefix frontend
+      - run: npm run build --prefix frontend
+      - run: npx playwright install --with-deps chromium
+        working-directory: frontend
+      - run: npx playwright test
+        working-directory: frontend
+      - run: npx playwright test --config playwright.release.config.ts
+        working-directory: frontend
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: проверка-интерфейса
+          path: |
+            ui-results.json
+            release-ui-results.json
+            frontend/test-results
+  windows-portable:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Сборка Windows Portable и backend-тесты
+        shell: pwsh
+        run: ./build_windows.ps1 -Mode Portable
+      - name: Проверка встроенного Python, базы и планировщика
+        shell: pwsh
+        run: |
+          $env:STAGEOS_HOME = Join-Path $env:RUNNER_TEMP 'StageOS-selftest'
+          & ./artifacts/StageOS-Portable/runtime/python.exe ./artifacts/StageOS-Portable/app/windows_desktop.py --self-test
+          if ($LASTEXITCODE -ne 0) { throw 'Portable self-test failed' }
+          Get-Content (Join-Path $env:STAGEOS_HOME 'selftest.json')
+      - name: Проверка загрузки оконной библиотеки
+        shell: pwsh
+        run: |
+          & ./artifacts/StageOS-Portable/runtime/python.exe -c "import clr; import webview.platforms.winforms; print('CLR and WinForms import: PASS')"
+          if ($LASTEXITCODE -ne 0) { throw 'Window host import failed' }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: StageOS-Windows-Portable
+          path: artifacts/StageOS-Portable.zip
