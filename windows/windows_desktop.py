@@ -20,18 +20,22 @@ def self_test():
     from sqlalchemy import select,func
     from datetime import datetime
     with tempfile.TemporaryDirectory(prefix='stageos-selftest-') as tmp:
-        app=create_app(make_engine('sqlite:///'+str(Path(tmp)/'selftest.db')),demo_enabled=False)
-        with app.state.Session.begin() as s:
-            assert s.scalar(select(func.count(Resource.id)))==0
-            venue=save_venue(s,{'name':'Проверка площадки','data':{}})
-            person=Resource(kind='Person',name='Проверка исполнителя',department='Артисты',data={'qualification':['Артисты'],'specialization':'Солист'})
-            s.add(person);s.flush()
-            data=template()['data'];data['home_venue']=venue.id
-            data['roles']=[dict(role='Проверочная роль',A=person.id,B=person.id,eligible=[person.id])]
-            p=Production(name='Проверка постановки',data=validate_production(s,data));s.add(p);s.flush()
-            r=Request(production_id=p.id,venue_id=venue.id,start=datetime(2026,12,1,18))
-            plan=preview(s,r);assert plan['status']=='READY';ev=save_plan(s,r,plan)
-            return {'status':'PASS','python':sys.version,'platform':sys.platform,'solver':plan['solver']['status'],'empty_database':'PASS','event_saved':ev.id,'desktop_gui':'NOT_TESTED'}
+        engine=make_engine('sqlite:///'+str(Path(tmp)/'selftest.db'))
+        try:
+            app=create_app(engine,demo_enabled=False)
+            with app.state.Session.begin() as s:
+                assert s.scalar(select(func.count(Resource.id)))==0
+                venue=save_venue(s,{'name':'Проверка площадки','data':{}})
+                person=Resource(kind='Person',name='Проверка исполнителя',department='Артисты',data={'qualification':['Артисты'],'specialization':'Солист'})
+                s.add(person);s.flush()
+                data=template()['data'];data['home_venue']=venue.id
+                data['roles']=[dict(role='Проверочная роль',A=person.id,B=person.id,eligible=[person.id])]
+                p=Production(name='Проверка постановки',data=validate_production(s,data));s.add(p);s.flush()
+                r=Request(production_id=p.id,venue_id=venue.id,start=datetime(2026,12,1,18))
+                plan=preview(s,r);assert plan['status']=='READY';ev=save_plan(s,r,plan)
+                return {'status':'PASS','python':sys.version,'platform':sys.platform,'solver':plan['solver']['status'],'empty_database':'PASS','event_saved':ev.id,'desktop_gui':'NOT_TESTED'}
+        finally:
+            engine.dispose()
 
 
 def main():
