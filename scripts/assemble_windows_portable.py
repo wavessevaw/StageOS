@@ -18,7 +18,29 @@ with ZipFile(ROOT / "windows-build/downloads/python-3.12.10-embed-amd64.zip") as
 site = runtime / "Lib/site-packages"
 site.mkdir(parents=True, exist_ok=True)
 manifest = []
+# Select only locked versions: an old download cache must not overwrite packages.
+pins = {}
+for line in (ROOT / "windows-runtime-lock.txt").read_text().splitlines():
+    if not line.strip() or line.startswith("#"):
+        continue
+    name, version = line.split("==")
+    key = name.lower().replace("_", "-")
+    if key in pins:
+        raise ValueError(f"Duplicate runtime pin: {name}")
+    pins[key] = version
+pins["proxy-tools"] = "0.1.0"
+selected = {}
 for wheel in sorted(WHEELS.glob("*.whl")):
+    name, version, _, _ = parse_wheel_filename(wheel.name)
+    key = str(name).replace("_", "-")
+    if pins.get(key) == str(version):
+        if key in selected:
+            raise ValueError(f"Multiple runtime wheels: {key}")
+        selected[key] = wheel
+missing = pins.keys() - selected.keys()
+if missing:
+    raise ValueError(f"Missing runtime wheels: {sorted(missing)}")
+for wheel in selected.values():
     with ZipFile(wheel) as z:
         for name in z.namelist():
             parts = Path(name).parts
