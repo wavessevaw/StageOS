@@ -1,0 +1,23 @@
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+Running 15 tests using 1 worker
+
+(node:89) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   1 e2e/app.spec.ts:3:3 › StageOS integration › First run → Предварительный план → confirm → calendar → detail → production (5.3s)
+  ✓   2 e2e/app.spec.ts:66:3 › StageOS integration › Day, week, month, filters and resource calendars (3.3s)
+  ✓   3 e2e/app.spec.ts:108:3 › StageOS integration › Incompatible venue blocks confirmation (1.9s)
+  ✓   4 e2e/app.spec.ts:128:3 › StageOS integration › Rehearsal create, real drag recalculation and resize (7.7s)
+  ✓   5 e2e/app.spec.ts:196:3 › StageOS integration › Production drilldown, palette, AI disabled and diagnostics (1.1s)
+  ✓   6 e2e/app.spec.ts:234:3 › StageOS integration › Resource CRUD persists through UI (1.4s)
+  ✓   7 e2e/app.spec.ts:254:3 › StageOS integration › Database backup/import and isolated demo scenarios (4.3s)
+  ✓   8 e2e/patch.spec.ts:5:1 › Editable production timing and replacement persisted from event (4.5s)
+  ✓   9 e2e/patch.spec.ts:71:1 › People categories and statistics, equipment categories, passport editor (2.1s)
+  ✓  10 e2e/patch.spec.ts:114:1 › Proposal rejection in notifications (1.4s)
+  ✓  11 e2e/patch.spec.ts:144:1 › Create a new production through category editor (1.6s)
+  ✓  12 e2e/version04.spec.ts:5:1 › Selective rehearsal staff and note (2.1s)
+  ✓  13 e2e/version04.spec.ts:40:1 › Create venue with mechanical resources through UI (661ms)
+  ✓  14 e2e/version04.spec.ts:72:1 › Create four physical units inside production passport (1.1s)
+  ✓  15 e2e/version04.spec.ts:104:1 › Force incompatible performance keeps conflicts and audit reason (2.7s)
+
+  15 passed (44.2s)
