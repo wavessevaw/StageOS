@@ -4,7 +4,7 @@ from zipfile import ZipFile
 from PIL import Image
 from sqlalchemy import select,func
 from backend.models import Event,Audit
-from backend.schedule_export import wrap,build_pages,render_pdf,export
+from backend.schedule_export import wrap,build_pages,render_pdf,export,translated
 from test_release import clean,setup_clean
 from test_core import confirm
 
@@ -49,6 +49,9 @@ def test_export_long_content_paginates_without_losing_text():
     assert len(pages)>2
     body=''.join(op[3] for page in pages for op in page if op[0]=='text')
     assert '1999_' in body
+    assert translated('Principal','ru')=='Ведущий танцовщик'
+    assert translated('Violin I','ru')=='Первые скрипки'
+    assert translated('Horn','en')=='Horn'
     assert render_pdf(pages).startswith(b'%PDF-')
     content,mime,ext=export(pages,'png')
     assert mime=='application/zip' and ext=='zip'

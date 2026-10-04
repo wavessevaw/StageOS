@@ -30,6 +30,11 @@ CANONICAL={
  'Техдир':('Техдир','Technical director'),'Звук':('Звук','Sound'),'Свет':('Свет','Lighting'),'Видео':('Видео','Video'),
  'Сцена':('Сцена','Stage'),'Хор':('Хор','Choir'),'Балет':('Балет','Ballet'),'Оркестр':('Оркестр','Orchestra'),
  'Грим':('Грим','Makeup'),'Костюм':('Костюм','Wardrobe'),'Soprano':('Сопрано','Soprano'),'Alto':('Альт','Alto'),'Tenor':('Тенор','Tenor'),'Bass':('Бас','Bass'),
+ 'Principal':('Ведущий танцовщик','Principal'),'Soloist':('Солист','Soloist'),'Ensemble':('Ансамбль','Ensemble'),'Reserve':('Резерв','Reserve'),
+ 'Violin I':('Первые скрипки','Violin I'),'Violin II':('Вторые скрипки','Violin II'),'Viola':('Альт','Viola'),'Cello':('Виолончель','Cello'),
+ 'Double Bass':('Контрабас','Double Bass'),'Flute':('Флейта','Flute'),'Oboe':('Гобой','Oboe'),'Clarinet':('Кларнет','Clarinet'),
+ 'Bassoon':('Фагот','Bassoon'),'Horn':('Валторна','Horn'),'Trumpet':('Труба','Trumpet'),'Trombone':('Тромбон','Trombone'),
+ 'Tuba':('Туба','Tuba'),'Percussion':('Ударные','Percussion'),'Harp':('Арфа','Harp'),'Keyboard':('Клавишные','Keyboard'),
 }
 def translated(value,locale):return CANONICAL.get(value,(value,value))[locale=='en']
 
