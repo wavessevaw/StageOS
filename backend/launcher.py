@@ -9,9 +9,11 @@ from backend.app import create_app
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=8765)
+    parser.add_argument("--test-no-auth", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
+    from backend.workspaces import create_workspace_app
     uvicorn.run(
-        create_app(),
+        create_app() if args.test_no_auth else create_workspace_app(),
         host="127.0.0.1",
         port=args.port,
         log_level="warning",

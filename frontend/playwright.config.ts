@@ -17,7 +17,7 @@ export default defineConfig({
       : {},
   },
   webServer: {
-    command: `${process.env.STAGEOS_PYTHON || "python"} -m backend.launcher --port 8877`,
+    command: `${process.env.STAGEOS_PYTHON || "python"} -m backend.launcher --test-no-auth --port 8877`,
     cwd: "..",
     url: "http://127.0.0.1:8877/api/bootstrap",
     reuseExistingServer: false,

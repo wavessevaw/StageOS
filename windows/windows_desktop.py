@@ -58,7 +58,9 @@ def main():
     import ctypes
     ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("StageOS.Desktop")
 
-    app = create_app(demo_enabled=False)
+    from backend.workspaces import create_workspace_app
+    profile = ROOT.parent / "bootstrap-accounts.json"
+    app = create_workspace_app(bootstrap_file=profile if profile.is_file() else None)
     listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     listener.bind(("127.0.0.1", 0))
     port = listener.getsockname()[1]
@@ -102,7 +104,7 @@ def main():
                 raise RuntimeError("Окно не загрузилось за 45 секунд")
             deadline=time.monotonic()+30
             while time.monotonic()<deadline:
-                if window.evaluate_js("document.body.innerText.includes('Создать рабочую базу')"):break
+                if window.evaluate_js("document.body.innerText.includes('Выберите театр')"):break
                 time.sleep(0.1)
             else:raise RuntimeError("Стартовый интерфейс не появился")
             assert window.evaluate_js("Boolean(sessionStorage.getItem('stageos-token'))")

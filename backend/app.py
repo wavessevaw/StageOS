@@ -84,7 +84,7 @@ def create_app(engine=None, static_dir=None, demo_enabled=None):
     with engine.begin() as connection:
         cfg.attributes["connection"] = connection
         command.upgrade(cfg, "head")
-    app = FastAPI(title="StageOS", version="1.0.2")
+    app = FastAPI(title="StageOS", version="1.0.3")
     app.state.Session = Session
 
     @app.middleware("http")
@@ -110,6 +110,10 @@ def create_app(engine=None, static_dir=None, demo_enabled=None):
     async def invalid(_, e):
         return JSONResponse({"detail": str(e)}, 422)
 
+    @app.get("/api/auth/theatres")
+    def core_test_auth():
+        return {"enabled":False,"theatres":[]}
+
     @app.get("/api/bootstrap")
     def bootstrap():
         with Session() as s:
@@ -119,7 +123,7 @@ def create_app(engine=None, static_dir=None, demo_enabled=None):
                 "resources": [serial(x) for x in s.scalars(select(Resource))],
                 "timezone": "Asia/Vladivostok",
                 "theatre_name": s.get(Setting,"theatre").value.get("name","") if s.get(Setting,"theatre") else "",
-                "version": "1.0.2",
+                "version": "1.0.3",
                 "language":s.get(Setting,"interface").value.get("language") if s.get(Setting,"interface") else None,
                 "demo_enabled": demo_enabled,
                 "departments": __import__("backend.production_editor",fromlist=["DEPARTMENTS"]).DEPARTMENTS,

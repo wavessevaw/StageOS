@@ -30,6 +30,7 @@ import {
   MoveUpRight,
 } from "lucide-react";
 import "./style.css";
+import {AccountGate,AccountMenu} from "./Accounts";
 import PassportEditor from "./PassportEditor";
 import VenueEditor from "./VenueEditor";
 import ScheduleExport from "./ScheduleExport";
@@ -50,6 +51,7 @@ async function api(path: string, method = "GET", body?: any) {
     },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
+  if (res.status===401) window.dispatchEvent(new Event("stageos-session-expired"));
   if (!res.ok) {
     let e = await res.json();
     throw new Error(
@@ -103,7 +105,7 @@ const today = local(new Date()).slice(0,10);
 function newEventForm(f: Obj): Obj {
   return { ...f, event_id: undefined, version: undefined, replacements: {}, task_overrides: {}, force: false, override_reason: "", notes: "" };
 }
-function App() {
+function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
   const language=useLanguage();
   const languageLoaded=useRef(false);
   const changeLanguage=async(value:Language)=>{
@@ -859,7 +861,7 @@ function App() {
           <span className="online" />
         </div>
         <nav>
-          {tr(nav.map(([name, Icon], i) => (
+          {tr(nav.filter(([name])=>!account||account.user.role==="admin"||name!=="Настройки").map(([name, Icon], i) => (
             <button
               key={name}
               className={
@@ -874,7 +876,7 @@ function App() {
           )))}
         </nav>
         <div className="sidebar-bottom">
-          <span className="online" />{tr("Локальная база данных")}<small>{tr("StageOS · 1.0.2")}</small>
+          <span className="online" />{tr("Локальная база данных")}<small>{tr("StageOS · 1.0.3")}</small>
         </div>
       </aside>
       <main>
@@ -895,7 +897,7 @@ function App() {
             <Bell size={19} />
           </button>
           <label className="language-switch"><span>{tr("Язык")}</span><select aria-label={tr("Язык приложения")} value={language} onChange={e=>changeLanguage(e.target.value as Language)}><option value="ru">Русский</option><option value="en">English</option></select></label>
-          <span className="avatar">{tr("АД")}</span>
+          {account && exit ? <AccountMenu session={account} exit={exit}/> : <span className="avatar">{tr("АД")}</span>}
         </header>
         {tr(error && (
           <div role="alert" className="error-banner">
@@ -3030,4 +3032,4 @@ function App() {
     </div>
   );
 }
-createRoot(document.getElementById("root")!).render(<App />);
+createRoot(document.getElementById("root")!).render(<AccountGate>{(account,exit)=><App key={account?.theatre.id+":"+account?.user.id} account={account} exit={exit}/>}</AccountGate>);

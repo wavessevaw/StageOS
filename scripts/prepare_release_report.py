@@ -12,14 +12,14 @@ def ui_count(name):
     stats=json.loads((root/name).read_text())['stats']
     if stats.get('unexpected') or stats.get('flaky'):raise RuntimeError('UI checks did not pass cleanly')
     return stats['expected']
-ui=ui_count('ui-results.json');empty=ui_count('release-ui-results.json')
+ui=ui_count('ui-results.json');empty=ui_count('release-ui-results.json');accounts=ui_count('accounts-ui-results.json')
 text=f'''# Сборка публичного релиза StageOS {version}
 
 Коммит: {sha}
 Проверки: {run}
 
 Обязательные задачи CI завершились успешно до создания этого отчёта:
-- Linux: {match.group(1)} backend-тестов; {ui} основных UI-сценариев; {empty} сценария пустой базы.
+- Linux: {match.group(1)} backend-тестов; {ui} основных UI-сценариев; {empty} сценария пустой базы; {accounts} сценария аккаунтов и пространств.
 - Критические проверки Python, TypeScript и production build.
 - Windows: backend-тесты, native launcher, Portable, проверка ресурсов EXE и байтов иконки.
 - Встроенные CPython, SQLite, CP-SAT, сохранение события, PDF/PNG: PASS.

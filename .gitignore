@@ -20,3 +20,7 @@ windows/StageOS.exe
 ui-results.json
 release-ui-results.json
 MANIFEST.sha256
+
+# Personal account provisioning and runtime registries
+bootstrap-accounts.json
+accounts.sqlite*

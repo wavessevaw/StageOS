@@ -74,3 +74,8 @@ SQLite imports validate the file signature, integrity, FK consistency, migration
 ## Windows build evidence
 
 The portable Win32 launcher is PE32+ x64 with Windows GUI subsystem, compiled using Zig 0.16.0. CPython and native dependencies are Windows distributions; checksums are in WINDOWS_RUNTIME_MANIFEST.json. Wine execution could not start because wineserver socket creation was denied by the execution environment. This is not a passed Windows smoke test.
+
+
+## Local theatre accounts (1.0.3)
+
+The production schema remains unchanged. A separate accounts.sqlite registry stores theatre IDs, database paths, salted password hashes, memberships and account audits. The HTTP workspace gateway authenticates requests and dispatches them to an application with its own SQLAlchemy Session for each theatre. No global session is rebound when switching theatres. Database import updates only that theatre’s persisted path. Runtime sessions are opaque, hashed in memory and do not survive server restart. Public builds contain no initial user credentials. The test-only core launcher flag is used explicitly by historical core UI regression suites; normal desktop and backend entrypoints always use the gateway.

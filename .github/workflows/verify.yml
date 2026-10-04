@@ -32,6 +32,8 @@ jobs:
         working-directory: frontend
       - run: npx playwright test --config playwright.release.config.ts | tee ../release-empty-ui-results.txt
         working-directory: frontend
+      - run: npx playwright test --config playwright.accounts.config.ts | tee ../release-accounts-ui-results.txt
+        working-directory: frontend
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -39,6 +41,7 @@ jobs:
           path: |
             ui-results.json
             release-ui-results.json
+            accounts-ui-results.json
             frontend/test-results
       - uses: actions/upload-artifact@v4
         with:
@@ -47,6 +50,7 @@ jobs:
             release-*-results.txt
             ui-results.json
             release-ui-results.json
+            accounts-ui-results.json
   windows-portable:
     runs-on: windows-2022
     timeout-minutes: 30
