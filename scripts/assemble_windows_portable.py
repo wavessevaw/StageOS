@@ -86,11 +86,12 @@ for folder in ["backend", "migrations"]:
 shutil.copytree(ROOT / "frontend/dist", app / "frontend/dist", dirs_exist_ok=True)
 shutil.copyfile(ROOT / "windows/windows_desktop.py", app / "windows_desktop.py")
 shutil.copyfile(ROOT / "windows/StageOS.exe", OUT / "StageOS.exe")
+shutil.copyfile(ROOT / "windows/StageOS.ico", OUT / "StageOS.ico")
 (OUT / "WINDOWS_RUNTIME_MANIFEST.json").write_text(
     json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
 )
 (OUT / "START_HERE_RU.txt").write_text(
-    "StageOS 1.0.0-rc.1\n\n1. Распакуйте всю папку в любое место.\n2. Запустите StageOS.exe двойным щелчком.\n3. Нажмите «Создать рабочую базу».\n\nPython, сервер базы и терминал запускать не нужно.\nДля окна требуется Microsoft Edge WebView2 Runtime (обычно уже установлен в Windows 11).\nДанные: %LOCALAPPDATA%\\StageOS-Work. Ошибки старта: startup-error.log в том же каталоге.\n\nWindows runtime включён. Попытка запуска через Wine заблокирована средой; запуск окна на Windows 10/11 ещё не проверен.\n",
+    "StageOS 1.0.0-rc.2\n\n1. Распакуйте всю папку в любое место.\n2. Запустите StageOS.exe двойным щелчком.\n3. Нажмите «Создать рабочую базу».\n\nPython, сервер базы и терминал запускать не нужно.\nДля окна требуется Microsoft Edge WebView2 Runtime (обычно уже установлен в Windows 11).\nДанные: %LOCALAPPDATA%\\StageOS-Work. Ошибки старта: startup-error.log в том же каталоге.\n\nWindows runtime включён. Попытка запуска через Wine заблокирована средой; запуск окна на Windows 10/11 ещё не проверен.\n",
     encoding="utf-8",
 )
 print(OUT)

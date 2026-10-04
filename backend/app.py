@@ -78,7 +78,7 @@ def create_app(engine=None, static_dir=None, demo_enabled=None):
     with engine.begin() as connection:
         cfg.attributes["connection"] = connection
         command.upgrade(cfg, "head")
-    app = FastAPI(title="StageOS", version="1.0.0-rc.1")
+    app = FastAPI(title="StageOS", version="1.0.0-rc.2")
     app.state.Session = Session
 
     @app.middleware("http")
@@ -113,7 +113,7 @@ def create_app(engine=None, static_dir=None, demo_enabled=None):
                 "resources": [serial(x) for x in s.scalars(select(Resource))],
                 "timezone": "Asia/Vladivostok",
                 "theatre_name": s.get(Setting,"theatre").value.get("name","") if s.get(Setting,"theatre") else "",
-                "version": "1.0.0-rc.1",
+                "version": "1.0.0-rc.2",
                 "demo_enabled": demo_enabled,
                 "departments": __import__("backend.production_editor",fromlist=["DEPARTMENTS"]).DEPARTMENTS,
             }
@@ -160,6 +160,7 @@ def create_app(engine=None, static_dir=None, demo_enabled=None):
             try:
                 from .catalog import validate_resource
                 from .production_editor import validate_production
+                from .database_io import validate_saved_data
                 with sessionmaker(new_engine)() as check:
                     for resource in check.scalars(select(Resource)):
                         validate_resource(check,resource.kind,resource.department,resource.data)
@@ -167,18 +168,27 @@ def create_app(engine=None, static_dir=None, demo_enabled=None):
                         validate_production(check,production.data)
                     for booking in check.scalars(select(Booking)):
                         if booking.end<=booking.start:raise ValueError('Неверный интервал бронирования')
-                    for ev in check.scalars(select(Event)):
-                        Request.model_validate(ev.data['request'])
-                        if ev.end<=ev.start:raise ValueError('Неверный интервал события')
+                    validate_saved_data(check)
+                    for setting in check.scalars(select(Setting)):
+                        if setting.key=='llm':validate_ai(setting.value)
+                        elif setting.key=='theatre' and (not isinstance(setting.value,dict) or not isinstance(setting.value.get('name'),str) or not setting.value['name'].strip()):
+                            raise ValueError('Название театра повреждено')
             except Exception as exc:
                 new_engine.dispose();target.unlink(missing_ok=True)
                 raise ValueError('Импорт отклонён: некорректные паспорта или интервалы') from exc
-            old = engine
-            engine = new_engine
+            # Persist the restart preference atomically before exposing the new engine.
+            pref=directory / "database-choice.json"
+            staging=pref.with_suffix(".tmp")
+            try:
+                staging.write_text(json.dumps({"path":str(target)}),encoding="utf-8")
+                staging.replace(pref)
+            except OSError as exc:
+                staging.unlink(missing_ok=True);new_engine.dispose();target.unlink(missing_ok=True)
+                raise ValueError("Не удалось сохранить выбор базы") from exc
+            old=engine
+            engine=new_engine
             Session.configure(bind=engine)
             old.dispose()
-            pref = directory / "database-choice.json"
-            pref.write_text(json.dumps({"path": str(target)}), encoding="utf-8")
         return {"opened": True}
 
     @app.get("/api/database/export")
@@ -287,10 +297,15 @@ def create_app(engine=None, static_dir=None, demo_enabled=None):
     ):
         with Session() as s:
             query = select(Event).where(Event.status != "Cancelled")
-            if start:
-                query = query.where(Event.end >= datetime.fromisoformat(start))
-            if end:
-                query = query.where(Event.start < datetime.fromisoformat(end))
+            lower=datetime.fromisoformat(start) if start else None
+            upper=datetime.fromisoformat(end) if end else None
+            if (lower and lower.tzinfo) or (upper and upper.tzinfo):raise ValueError("Используйте локальное время без UTC offset")
+            if lower and upper and lower>=upper:raise ValueError("Неверный диапазон календаря")
+            # Include production work outside the curtain interval, using half-open ranges.
+            if lower:
+                query=query.where((Event.end>lower) | Event.id.in_(select(Task.event_id).where(Task.end>lower)))
+            if upper:
+                query=query.where((Event.start<upper) | Event.id.in_(select(Task.event_id).where(Task.start<upper)))
             if venue:
                 query = query.where(Event.venue_id == venue)
             if production:
@@ -299,13 +314,9 @@ def create_app(engine=None, static_dir=None, demo_enabled=None):
                 query = query.where(Event.kind == kind)
             if q:
                 query = query.where(Event.title.contains(q))
-            rid = person or equipment
-            if rid:
-                query = query.where(
-                    Event.id.in_(
-                        select(Booking.event_id).where(Booking.resource_id == rid)
-                    )
-                )
+            for rid in [person,equipment]:
+                if rid:
+                    query=query.where(Event.id.in_(select(Booking.event_id).where(Booking.resource_id==rid)))
             if department:
                 query = query.where(
                     Event.id.in_(
@@ -378,6 +389,7 @@ def create_app(engine=None, static_dir=None, demo_enabled=None):
                 raise HTTPException(404)
             if ev.version != body.version:
                 raise HTTPException(409, "Версия устарела")
+            if ev.status in ["Cancelled","Completed"]:raise ValueError("Событие уже завершено или отменено")
             if body.status != "Cancelled" and (
                 ev.status not in flow
                 or body.status not in flow
@@ -422,6 +434,7 @@ def create_app(engine=None, static_dir=None, demo_enabled=None):
     @app.post("/api/proposals/{aid}/approve")
     def approve(aid: int):
         with LOCK, Session.begin() as s:
+            if engine.dialect.name == "sqlite":s.execute(text("BEGIN IMMEDIATE"))
             a = s.get(Audit, aid)
             if not a or a.action != "PROPOSED" or a.data["state"] != "Pending Approval":
                 raise ValueError("Предложение недоступно")
@@ -542,6 +555,9 @@ def create_app(engine=None, static_dir=None, demo_enabled=None):
                 r.data = {**r.data, **body["data"]}
             from .catalog import validate_resource
             r.data=validate_resource(s,r.kind,r.department,r.data)
+            if r.kind=="Venue":
+                from .catalog import save_venue
+                save_venue(s,{"name":r.name,"data":r.data},r)
             s.add(
                 Audit(
                     action="Ресурс изменён", data={"before": before, "after": serial(r)}
@@ -820,6 +836,8 @@ def create_app(engine=None, static_dir=None, demo_enabled=None):
             if a.tzinfo or b.tzinfo:raise ValueError("Используйте локальное время без UTC offset")
             if b <= a:
                 raise ValueError("Неверный интервал")
+            ev=s.get(Event,t.event_id)
+            if ev.status=="Cancelled":raise ValueError("Нельзя записать работы отменённого события")
             before=serial(t)
             t.actual_start = a
             t.actual_end = b
@@ -872,6 +890,18 @@ def create_app(engine=None, static_dir=None, demo_enabled=None):
                 ],
             }
 
+    def validate_ai(body):
+        from urllib.parse import urlparse
+        if not isinstance(body,dict) or not {'enabled','endpoint','model','provider'}<=body.keys():raise ValueError('Заполните настройки локального помощника')
+        if not isinstance(body['enabled'],bool):raise ValueError('Включение помощника: требуется Да/Нет')
+        if any(not isinstance(body[k],str) for k in ['endpoint','model','provider']):raise ValueError('Настройки помощника должны быть строками')
+        if len(body['endpoint'])>2000 or len(body['model'])>200:raise ValueError('Настройки помощника слишком длинные')
+        url=urlparse(body['endpoint'])
+        if url.scheme not in ['http','https'] or not url.hostname:raise ValueError('Укажите HTTP(S) адрес')
+        if body['provider'] not in ['Ollama','LM Studio','llama.cpp','Custom']:raise ValueError('Неизвестный провайдер помощника')
+        if body['enabled'] and not body['model'].strip():raise ValueError('Выберите модель помощника')
+        return {k:body[k] for k in ['enabled','endpoint','model','provider']}
+
     @app.get("/api/settings/llm")
     def get_ai():
         with Session() as s:
@@ -889,11 +919,7 @@ def create_app(engine=None, static_dir=None, demo_enabled=None):
 
     @app.put("/api/settings/llm")
     def set_ai(body: dict):
-        from urllib.parse import urlparse
-
-        url = urlparse(body.get("endpoint", ""))
-        if url.scheme not in ["http", "https"] or not url.hostname:
-            raise ValueError("Укажите HTTP(S) endpoint")
+        body=validate_ai(body)
         with LOCK, Session.begin() as s:
             s.merge(
                 Setting(
@@ -1066,6 +1092,8 @@ def create_app(engine=None, static_dir=None, demo_enabled=None):
 
         @app.get("/{path:path}")
         def index(path: str):
+            if path.startswith('api/') or path=='api':raise HTTPException(404,'Метод не найден')
+            if path=='stageos-icon.svg':return FileResponse(static / path,media_type='image/svg+xml')
             return FileResponse(static / "index.html")
 
     return app

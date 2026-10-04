@@ -3,20 +3,24 @@ from .models import Resource, Booking, Audit
 
 VENUE_DEFAULTS = dict(seats=300,width=12,depth=10,height=8,power=80,dmx=8,orchestra=35,fly_system=True,movement=False,bar_load=300,gate_width=3,gate_height=3,travel=30,soffits=3,fly_bars=8,lighting_positions=5,pa=True,video=True,rooms=4,opening=8,closing=24)
 
+def validate_venue_data(source):
+    from .production_editor import number
+    if not isinstance(source,dict):raise ValueError("Паспорт площадки должен быть объектом")
+    data={**VENUE_DEFAULTS,**source}
+    for k,default in VENUE_DEFAULTS.items():
+        if isinstance(default,bool):
+            if not isinstance(data[k],bool):raise ValueError("Ожидается Да/Нет: "+k)
+        else:number(data[k],"Параметр площадки "+k,integer=k in ["seats","orchestra","rooms","dmx","fly_bars","soffits","lighting_positions","travel"])
+    if not 0<=data["opening"]<data["closing"]<=24:raise ValueError("Время открытия должно предшествовать закрытию: 0–24 часа")
+    if any(data[k]>200 for k in ["fly_bars","soffits","lighting_positions"]):raise ValueError("Количество механических ресурсов: целое от 0 до 200")
+    return data
+
 def save_venue(s, body, venue=None):
     name=str(body.get('name','')).strip()
     if not name or len(name)>200: raise ValueError('Название площадки: от 1 до 200 символов')
     if not isinstance(body.get('data',{}),dict):raise ValueError('Паспорт площадки должен быть объектом')
     data={**VENUE_DEFAULTS,**(venue.data if venue else {}),**body.get('data',{})}
-    for k in VENUE_DEFAULTS:
-        if isinstance(VENUE_DEFAULTS[k],bool):
-            if not isinstance(data[k],bool):raise ValueError('Ожидается Да/Нет')
-        elif isinstance(data[k],bool) or not isinstance(data[k],(int,float)) or not 0<=data[k]<=100000:raise ValueError('Параметры площадки должны быть неотрицательными числами')
-    if not 0<=data['opening']<data['closing']<=24:raise ValueError('Время открытия должно предшествовать закрытию: 0–24 часа')
-    for k in ['fly_bars','soffits','lighting_positions']:
-        if isinstance(data[k],bool) or not isinstance(data[k],int) or data[k]>200:raise ValueError('Количество механических ресурсов: целое от 0 до 200')
-    for k in ['seats','orchestra','rooms','dmx']:
-        if isinstance(data[k],bool) or not isinstance(data[k],int):raise ValueError('Места, помещения и световые линии: целые числа')
+    data=validate_venue_data(data)
     if not venue:
         venue=Resource(kind='Venue',department='Площадки',name=name,data=data);s.add(venue);s.flush()
     else:venue.name=name;venue.data=data
@@ -48,15 +52,20 @@ def create_units(s, body):
 
 def validate_resource(s, kind, department, data):
     from .production_editor import number
+    if kind not in ["Person","Venue","Room","Equipment","Equipment Kit","Vehicle","Scenery","Prop","Costume","Fly Bar","Soffit","Lighting Position"]:raise ValueError("Неизвестный тип ресурса")
     if not isinstance(data,dict):raise ValueError('Паспорт ресурса должен быть объектом')
     d=dict(data)
+    if not isinstance(department,str) or len(department)>40:raise ValueError("Подразделение: строка до 40 символов")
+    if kind=="Venue":return validate_venue_data(d)
+    for key in ["fly","movement","scenery_allowed","lighting_allowed","retired"]:
+        if key in d and not isinstance(d[key],bool):raise ValueError("Параметр ресурса "+key+": требуется Да/Нет")
     if kind=='Person':
         if not str(department).strip():raise ValueError('Укажите цех сотрудника')
         qs=d.get('qualification')
         if not isinstance(qs,list) or not qs or any(not isinstance(q,str) or not q.strip() for q in qs):raise ValueError('Укажите квалификацию сотрудника')
         d.setdefault('specialization',department)
-    for key in ['width','depth','height','mass','setup','crew','capacity','current_load','travel','power','dmx']:
-        if key in d:number(d[key],'Параметр ресурса '+key,integer=key in ['crew','dmx'])
+    for key in ['width','depth','height','mass','setup','crew','capacity','current_load','travel','power','dmx','transport_width','transport_height']:
+        if key in d:number(d[key],'Параметр ресурса '+key,integer=key in ['crew','dmx','travel'])
     if kind in ['Room','Fly Bar','Soffit','Lighting Position']:
         parent=s.get(Resource,d.get('venue_id')) if isinstance(d.get('venue_id'),int) else None
         if not parent or parent.kind!='Venue':raise ValueError('Укажите площадку ресурса')

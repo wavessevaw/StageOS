@@ -68,7 +68,27 @@ jobs:
         run: |
           & ./artifacts/StageOS-Portable/runtime/python.exe -c "import clr; import webview.platforms.winforms; print('CLR and WinForms import: PASS')"
           if ($LASTEXITCODE -ne 0) { throw 'Window host import failed' }
+      - name: Запуск настоящего окна WebView2 и завершение приложения
+        shell: pwsh
+        run: |
+          $env:STAGEOS_HOME = Join-Path $env:RUNNER_TEMP 'StageOS-gui-test'
+          $process = Start-Process -FilePath ./artifacts/StageOS-Portable/runtime/python.exe -ArgumentList './artifacts/StageOS-Portable/app/windows_desktop.py','--gui-test' -PassThru
+          if (-not $process.WaitForExit(90000)) { Stop-Process -Id $process.Id -Force; throw 'Window test timed out' }
+          Get-Content (Join-Path $env:STAGEOS_HOME 'gui-selftest.json') -ErrorAction SilentlyContinue
+          Get-Content (Join-Path $env:STAGEOS_HOME 'startup-error.log') -ErrorAction SilentlyContinue
+          if ($process.ExitCode -ne 0) { throw 'Native GUI test failed' }
+          $receipt = Get-Content (Join-Path $env:STAGEOS_HOME 'gui-selftest.json') | ConvertFrom-Json
+          if ($receipt.status -ne 'PASS') { throw 'Window receipt failed' }
       - uses: actions/upload-artifact@v4
         with:
           name: StageOS-Windows-Portable
           path: artifacts/StageOS-Portable.zip
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-diagnostics
+          path: |
+            ${{ runner.temp }}/StageOS-selftest/*.json
+            ${{ runner.temp }}/StageOS-selftest/*.log
+            ${{ runner.temp }}/StageOS-gui-test/*.json
+            ${{ runner.temp }}/StageOS-gui-test/*.log

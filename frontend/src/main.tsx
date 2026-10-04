@@ -318,6 +318,17 @@ function App() {
       cancelled = true;
     };
   }, [page, filter, revision, boot?.initialized]);
+  useEffect(() => {
+    if (page !== "Календарь" || view !== "production") return;
+    let cancelled = false;
+    setSlots([]);
+    const matching = events.filter(e => e.start.slice(0, 10) === calDate ||
+      (e.tasks || []).some((t: Obj) => t.start.slice(0, 10) <= calDate && t.end.slice(0, 10) >= calDate));
+    Promise.all(matching.map(e => api("/events/" + e.id)))
+      .then(items => { if (!cancelled) setSlots(items); })
+      .catch(e => { if (!cancelled) setError(ru(e.message)); });
+    return () => { cancelled = true; };
+  }, [page, view, events, calDate]);
   function go(p: string) {
     setPage(p);
     setVenueEditor(null);
@@ -835,7 +846,7 @@ function App() {
       <aside>
         <div className="brand">
           <div className="brandmark">
-            <Layers size={24} />
+            <img src="/stageos-icon.svg" width={40} height={40} alt="" />
           </div>
           <span>
             Stage<span className="thin">OS</span>
@@ -1426,18 +1437,7 @@ function App() {
                                 cal.current?.getApi().changeView(v, calDate),
                               0,
                             );
-                          else
-                            run(async () =>
-                              setSlots(
-                                await Promise.all(
-                                  events
-                                    .filter(
-                                      (e) => e.start.slice(0, 10) === calDate,
-                                    )
-                                    .map((e) => api("/events/" + e.id)),
-                                ),
-                              ),
-                            );
+
                         }}
                       >
                         {n}
@@ -1529,18 +1529,7 @@ function App() {
                           value={calDate}
                           onChange={(e) => {
                             setCalDate(e.target.value);
-                            run(async () =>
-                              setSlots(
-                                await Promise.all(
-                                  events
-                                    .filter(
-                                      (x) =>
-                                        x.start.slice(0, 10) === e.target.value,
-                                    )
-                                    .map((x) => api("/events/" + x.id)),
-                                ),
-                              ),
-                            );
+
                           }}
                         />
                       </div>
@@ -1602,8 +1591,7 @@ function App() {
                           arg.view.type === "timeGridDay"
                             ? arg.start
                             : arg.view.currentStart;
-                        if (view === "timeGridDay")
-                          setCalDate(local(d).slice(0, 10));
+                        setCalDate(local(d).slice(0, 10));
                       }}
                       events={[
                         ...events.map((e) => ({
@@ -1650,6 +1638,9 @@ function App() {
                         ...blocks
                           .filter(
                             (b) =>
+                              (!filter.department || resource(b.resource_id)?.department === filter.department) &&
+                              (!filter.q || (b.label + " " + (resource(b.resource_id)?.name || "")).toLowerCase().includes(String(filter.q).toLowerCase())) &&
+                              (!filter.production && !filter.kind) &&
                               (!filter.person ||
                                 +filter.person === b.resource_id) &&
                               (!filter.venue ||

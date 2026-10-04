@@ -137,8 +137,8 @@ aside {
   display: flex;
   border-radius: 11px;
   color: white;
-  background: #277768;
-  padding: 9px;
+  background: transparent;
+  padding: 0;
 }
 .thin {
   font-weight: 350;

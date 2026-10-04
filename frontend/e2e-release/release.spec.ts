@@ -46,3 +46,28 @@ test('Empty working database → venue → employee → production → calendar 
  await expect(page.getByText('24 демонстрационных конфликта',{exact:true})).toHaveCount(0);
  expect(errors).toEqual([]);
 });
+
+test('Production view refreshes when filters change; absence respects department',async({page,request})=>{
+ const boot=await (await request.get('/api/bootstrap')).json();
+ const original=boot.productions[0];
+ const second=await (await request.post('/api/productions',{data:{name:'Утренний спектакль',data:original.data}})).json();
+ const command={production_id:second.id,venue_id:second.data.home_venue,start:'2026-12-01T10:00:00'};
+ const plan=await (await request.post('/api/preview',{data:command})).json();expect(plan.status).toBe('READY');
+ expect((await request.post('/api/events',{data:{request:command,fingerprint:plan.fingerprint}})).ok()).toBeTruthy();
+ const tech=await (await request.post('/api/resources',{data:{kind:'Person',name:'Техник для проверки',department:'Звук',data:{qualification:['Звук']}}})).json();
+ await request.post('/api/blocks',{data:{resource_id:tech.id,start:'2026-12-01T11:00:00',end:'2026-12-01T12:00:00',label:'Отсутствие звуковика'}});
+ await page.goto('/');const icon=page.locator('.brandmark img');await expect(icon).toBeVisible();
+ expect(await icon.evaluate((el:HTMLImageElement)=>el.complete&&el.naturalWidth>0)).toBeTruthy();
+ await page.getByRole('button',{name:'Календарь',exact:true}).click();
+ await page.getByRole('button',{name:'Производство',exact:true}).click();
+ await page.getByLabel('Дата производства').fill('2026-12-01');
+ await expect(page.locator('.calendar-panel h3').filter({hasText:'Утренний спектакль'})).toBeVisible();
+ await page.getByLabel('Фильтр Постановка').selectOption(String(original.id));
+ await expect(page.locator('.calendar-panel h3').filter({hasText:'Утренний спектакль'})).toHaveCount(0);
+ await expect(page.locator('.calendar-panel h3').filter({hasText:'Моя первая постановка'})).toBeVisible();
+ await page.getByRole('button',{name:'Сброс',exact:true}).click();
+ await expect(page.locator('.calendar-panel h3').filter({hasText:'Утренний спектакль'})).toBeVisible();
+ await page.getByRole('button',{name:'Месяц',exact:true}).click();
+ await page.getByLabel('Фильтр Подразделение').selectOption('Артисты');
+ await expect(page.locator('.fc-event').filter({hasText:'Отсутствие звуковика'})).toHaveCount(0);
+});
