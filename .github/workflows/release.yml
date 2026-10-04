@@ -4,12 +4,12 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/release.yml'
-      - 'docs/releases/1.0.0.md'
+      - 'docs/releases/*.md'
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: stageos-release-v1.0.0
+  group: stageos-release
   cancel-in-progress: false
 jobs:
   verify:
@@ -42,7 +42,8 @@ jobs:
           python scripts/prepare_release_report.py
           python scripts/package_release.py
           mkdir -p release-assets
-          cp ../StageOS-Release-1.0.0.zip release-assets/
+          version=$(python -c "import json; print(json.load(open('frontend/package.json'))['version'])")
+          cp "../StageOS-Release-$version.zip" release-assets/
           cp README_RU.md ARCHITECTURE.md RELEASE_AUDIT_RU.md TEST_RESULTS.md BUILD_RESULTS.md GITHUB_RELEASE_BUILD.md release-assets/
           cd release-assets
           sha256sum * > SHA256SUMS.txt
@@ -50,15 +51,16 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          tag=v1.0.0
+          version=$(python -c "import json; print(json.load(open('frontend/package.json'))['version'])")
+          tag="v$version"
           if gh release view "$tag" --json isDraft > /tmp/stageos-existing-release.json 2>/dev/null; then
             echo "Release already exists; refusing to replace published assets."
             exit 1
           fi
           gh release create "$tag" release-assets/* \
             --target "$GITHUB_SHA" \
-            --title "StageOS 1.0.0 — театр, производство, календарь" \
-            --notes-file docs/releases/1.0.0.md \
+            --title "StageOS $version — исправления планирования" \
+            --notes-file "docs/releases/$version.md" \
             --draft
           gh release edit "$tag" --draft=false
           gh release view "$tag" --json url,assets,isDraft,isPrerelease

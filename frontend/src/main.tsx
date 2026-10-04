@@ -99,6 +99,9 @@ function shiftedStart(req: Obj, start: string): Obj {
   return {...req,start,task_overrides:edits};
 }
 const today = local(new Date()).slice(0,10);
+function newEventForm(f: Obj): Obj {
+  return { ...f, event_id: undefined, version: undefined, replacements: {}, task_overrides: {}, force: false, override_reason: "", notes: "" };
+}
 function App() {
   const language=useLanguage();
   const languageLoaded=useRef(false);
@@ -340,7 +343,14 @@ function App() {
       .catch(e => { if (!cancelled) setError(ru(e.message)); });
     return () => { cancelled = true; };
   }, [page, view, events, calDate]);
-  function go(p: string) {
+  function go(p: string, preserveEvent = false) {
+    if (p === "Назначить" && !preserveEvent) {
+      setForm(f => f.event_id ? newEventForm(f) : f);
+      setOverride("");
+      setPreview(null);
+      setWindows([]);
+      setError("");
+    }
     setPage(p);
     setVenueEditor(null);
     setSelected(null);
@@ -436,12 +446,7 @@ function App() {
       setView("timeGridWeek");
       setPage("Календарь");
       setRevision((x) => x + 1);
-      setForm((f) => ({
-        ...f,
-        event_id: undefined,
-        version: undefined,
-        replacements: {},
-      }));
+      setForm(newEventForm);
       setToast("Событие и производственная цепочка сохранены");
     });
   }
@@ -462,7 +467,7 @@ function App() {
     setForm(req);
     setDetail(null);
     setPreview(null);
-    go("Назначить");
+    go("Назначить", true);
   }
   const nav = [
     ["Назначить", Plus],
@@ -868,7 +873,7 @@ function App() {
           )))}
         </nav>
         <div className="sidebar-bottom">
-          <span className="online" />{tr("Локальная база данных")}<small>{tr("StageOS · 1.0.0")}</small>
+          <span className="online" />{tr("Локальная база данных")}<small>{tr("StageOS · 1.0.1")}</small>
         </div>
       </aside>
       <main>
@@ -1356,11 +1361,7 @@ function App() {
                   <button
                     className="primary"
                     onClick={() => {
-                      setForm((f) => ({
-                        ...f,
-                        event_id: undefined,
-                        version: undefined,
-                      }));
+                      setForm(newEventForm);
                       go("Назначить");
                     }}
                   >
@@ -1613,12 +1614,7 @@ function App() {
                             ?.getApi()
                             .changeView("timeGridDay", arg.date);
                         } else {
-                          setForm((f) => ({
-                            ...f,
-                            start: local(arg.date),
-                            event_id: undefined,
-                            version: undefined,
-                          }));
+                          setForm(f => newEventForm({ ...f, start: local(arg.date) }));
                           go("Назначить");
                         }
                       }}

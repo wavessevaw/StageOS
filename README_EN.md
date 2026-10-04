@@ -84,7 +84,7 @@ Switch **Russian / English** in the header. Your preference is stored in the dat
 
 ## Release status
 
-**Version 1.0.0** adds incomplete passports, independent department casts, a new native icon, persisted language selection, and offline PDF/PNG schedule export. The working package starts with an empty database. Publication is gated by [backend, browser UI and Windows checks](https://github.com/wavessevaw/StageOS/actions/workflows/release.yml); exact results and limitations are included in the release archive. Back up your database before updating.
+**Version 1.0.1** adds incomplete passports, independent department casts, a new native icon, persisted language selection, and offline PDF/PNG schedule export. The working package starts with an empty database. Publication is gated by [backend, browser UI and Windows checks](https://github.com/wavessevaw/StageOS/actions/workflows/release.yml); exact results and limitations are included in the release archive. Back up your database before updating.
 
 <details>
 <summary>Verification and current limits</summary>
