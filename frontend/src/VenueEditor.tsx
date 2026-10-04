@@ -99,7 +99,7 @@ export default function VenueEditor({
                     [k]:
                       typeof v === "boolean"
                         ? e.target.checked
-                        : +e.target.value,
+                        : e.target.value === "" ? "" : +e.target.value,
                   },
                 })
               }
@@ -120,7 +120,7 @@ export default function VenueEditor({
         onClick={async () => {
           setBusy(true);
           try {
-            await onSave(d);
+            await onSave({...d,data:Object.fromEntries(Object.entries(d.data).map(([k,v])=>[k,v === "" && typeof defaults[k] === "number" ? 0 : v]))});
           } catch (e: any) {
             setError(e.message);
           } finally {

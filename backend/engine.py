@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field, field_validator, StrictInt
 from sqlalchemy import select, delete
 from ortools.sat.python import cp_model
 from .models import Resource, Production, Event, Booking, Task, Audit
+from .production_editor import cast_people
 
 
 class TaskTiming(BaseModel):
@@ -426,7 +427,7 @@ def preview(s, r: Request, production_data=None):
     valid_replacements=set(p.data["responsibles"].values())
     for role in p.data["roles"]:valid_replacements.add(role[r.cast])
     for group in ["groups","crew"]:
-        for ids in p.data[group].values():valid_replacements.update(ids)
+        for ids in cast_people(p.data,group,r.cast).values():valid_replacements.update(ids)
     for ov in p.data.get("overrides",{}).values():valid_replacements.update(ov.get("orchestra",[]))
     valid_replacements.update(r.rehearsal_people or [])
     if any(not key.isdecimal() or int(key) not in valid_replacements for key in r.replacements):
@@ -484,6 +485,10 @@ def preview(s, r: Request, production_data=None):
             bookings[rid] = {"resource_id": rid, "start": a, "end": b, "label": label}
 
     def assign(rid, role, dept, a, b, eligible=None):
+        if not rid:
+            if rehearsal and r.rehearsal_people is not None:return
+            conflicts.append(issue("unassigned",role,"Не назначен исполнитель выбранного состава","ERROR"))
+            return
         actual = r.replacements.get(str(rid), rid)
         if rehearsal and r.rehearsal_people is not None and actual not in r.rehearsal_people:
             return
@@ -550,7 +555,7 @@ def preview(s, r: Request, production_data=None):
             end,
             role["eligible"],
         )
-    groupids = dict(p.data["groups"])
+    groupids = cast_people(p.data,"groups",r.cast)
     if comp["override"]:
         groupids["Оркестр"] = comp["override"]["orchestra"]
     if rehearsal and r.scenes:
@@ -587,7 +592,7 @@ def preview(s, r: Request, production_data=None):
         if item.kind=='Scenery' and (item.data.get('width',0)>v.data.get('width',0) or item.data.get('height',0)>v.data.get('height',0) or item.data.get('depth',0)>v.data.get('depth',0)):
             conflicts.append(issue('scenery',item.name,'Декорация не помещается на сцене','CRITICAL'))
     if not rehearsal:
-        for dept, ids in p.data["crew"].items():
+        for dept, ids in cast_people(p.data,"crew",r.cast).items():
             for rid in ids:
                 assign(rid, f"{dept} · техник", dept, first if dept == "Транспорт" else techstart, last if dept == "Транспорт" else techend)
         for kitid in (

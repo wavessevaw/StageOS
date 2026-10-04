@@ -1,0 +1,37 @@
+import {test,expect} from '@playwright/test';
+test('Incomplete passport saves and service casts add people one at a time',async({page,request})=>{
+  await request.post('/api/demo');
+  await page.goto('/');
+  await page.getByRole('button',{name:'Добавить спектакль',exact:true}).first().click();
+  await page.getByLabel('Название постановки',{exact:true}).fill('Неполная новая постановка');
+  await page.getByRole('button',{name:'Сохранить постановку',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'Неполная новая постановка',exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Редактировать постановку',exact:true}).click();
+  await page.getByRole('button',{name:'Люди',exact:true}).click();
+  const cast=page.getByRole('region',{name:'Хор · Первый состав'});
+  await cast.getByRole('button',{name:'Добавить сотрудника',exact:true}).click();
+  const select=page.getByLabel('Хор A добавить сотрудника',{exact:true});
+  const id=await select.locator('option').nth(1).getAttribute('value');
+  await select.selectOption(id!);
+  await expect(cast.getByLabel('Хор A сотрудник 1',{exact:true})).toHaveValue(id!);
+  await page.getByRole('button',{name:'Сохранить постановку',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'Неполная новая постановка',exact:true})).toBeVisible();
+  const b=await(await request.get('/api/bootstrap')).json();
+  const p=b.productions.find((p:any)=>p.name==='Неполная новая постановка');
+  expect(p.data.home_venue).toBe(0);
+  expect(p.data.groups_casts['Хор']).toEqual({A:[+id!],B:[]});
+});
+test('Venue numeric input clears without forced zero; resource department starts blank',async({page,request})=>{
+  await request.post('/api/demo');await page.goto('/');
+  await page.getByRole('button',{name:'Площадки',exact:true}).click();
+  await page.getByRole('button',{name:'Добавить площадку',exact:true}).click();
+  await page.getByLabel('Название площадки',{exact:true}).fill('Площадка без ведущего нуля');
+  const field=page.getByLabel('Количество световых линий',{exact:true});
+  await field.fill('');await expect(field).toHaveValue('');
+  await field.pressSequentially('6');await expect(field).toHaveValue('6');
+  await page.getByRole('button',{name:'Сохранить площадку',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'Площадка без ведущего нуля',exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Сотрудники',exact:true}).click();
+  await page.getByRole('button',{name:'Добавить сотрудника',exact:true}).click();
+  await expect(page.getByLabel('Подразделение',{exact:true})).toHaveValue('');
+});

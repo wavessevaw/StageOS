@@ -1874,7 +1874,7 @@ function App() {
                                     {ru(v)}: {arr.length} музыкантов
                                   </p>
                                 ))}
-                              {ids.map((id: number) => (
+                              {selected.data.groups_casts?.[d] ? ["A","B"].map(cast=><section key={cast}><h4>{cast === "A" ? "Первый состав" : "Второй состав"}</h4>{(selected.data.groups_casts[d][cast] ?? ids).map((id:number)=><div className="personline" key={id}><span>{resource(id)?.name}</span><small>{ru(resource(id)?.data.specialization)}</small></div>)}</section>) : ids.map((id: number) => (
                                 <div className="personline" key={id}>
                                   <span>{ru(resource(id)?.name)}</span>
                                   <small>
@@ -1892,7 +1892,7 @@ function App() {
                                 Техническая группа · {ru(d)}
                                 <span>{ids.length}</span>
                               </summary>
-                              {ids.map((id: number) => (
+                              {selected.data.crew_casts?.[d] ? ["A","B"].map(cast=><section key={cast}><h4>{cast === "A" ? "Первый состав" : "Второй состав"}</h4>{(selected.data.crew_casts[d][cast] ?? ids).map((id:number)=><div className="personline" key={id}><span>{resource(id)?.name}</span><small>{ru(resource(id)?.data.specialization)}</small></div>)}</section>) : ids.map((id: number) => (
                                 <div className="personline" key={id}>
                                   {ru(resource(id)?.name)}
                                   <small>
@@ -2056,7 +2056,7 @@ function App() {
                                   : "Equipment",
                               name: "",
                               department:
-                                page === "Оркестр" ? "Оркестр" : "Звук",
+                                page === "Оркестр" ? "Оркестр" : "",
                               specialization: "",
                             })
                       }
@@ -3027,6 +3027,7 @@ function App() {
                   const r = resourceEditor;
                   const data = {
                     ...(r.data || {}),
+                    ...(["Room","Vehicle"].includes(r.kind) ? {capacity:r.data?.capacity === "" ? 0 : (r.data?.capacity ?? 0)} : {}),
                     specialization: r.specialization || r.department,
                     qualification: [...new Set([...(r.data?.qualification || []), r.department, r.specialization || r.department])],
                   };
@@ -3104,7 +3105,7 @@ function App() {
                 />
               </label>
               {resourceEditor.kind === "Room" && <label className="field"><span>Площадка помещения</span><select required value={resourceEditor.data?.venue_id || 0} onChange={e => setResourceEditor({...resourceEditor,data:{...resourceEditor.data,venue_id:+e.target.value}})}><option value="0">Выберите площадку</option>{resources.filter(r=>r.kind==="Venue").map(r=><option key={r.id} value={r.id}>{r.name}</option>)}</select></label>}
-              {["Room","Vehicle"].includes(resourceEditor.kind) && <label className="field"><span>Вместимость</span><input type="number" min={0} value={resourceEditor.data?.capacity || 0} onChange={e=>setResourceEditor({...resourceEditor,data:{...resourceEditor.data,capacity:+e.target.value}})}/></label>}
+              {["Room","Vehicle"].includes(resourceEditor.kind) && <label className="field"><span>Вместимость</span><input type="number" min={0} value={resourceEditor.data?.capacity ?? ""} onChange={e=>setResourceEditor({...resourceEditor,data:{...resourceEditor.data,capacity:e.target.value === "" ? "" : +e.target.value}})}/></label>}
               {resourceEditor.kind === "Equipment Kit" && <label className="field"><span>Имущество комплекта</span><select multiple size={6} value={(resourceEditor.data?.items || []).map(String)} onChange={e=>setResourceEditor({...resourceEditor,data:{...resourceEditor.data,items:Array.from(e.target.selectedOptions).map(o=>+o.value)}})}>{resources.filter(r=>r.kind==="Equipment").map(r=><option key={r.id} value={r.id}>{r.name}</option>)}</select></label>}
               {resourceEditor.kind === "Equipment" && (
                 <label className="field">

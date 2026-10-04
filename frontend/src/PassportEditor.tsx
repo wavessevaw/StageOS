@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import InventoryEditor from "./InventoryEditor";
+import PeopleCastEditor from "./PeopleCastEditor";
 import { ru } from "./ru";
 type O = Record<string, any>;
 const labels: O = {
@@ -98,6 +99,11 @@ export default function PassportEditor({
         Видео: [],
         ...p.data.crew,
       };
+      for (const section of ["groups","crew"]) {
+        p.data[section+"_casts"] ??= {};
+        for (const [dept,ids] of Object.entries(p.data[section]))
+          p.data[section+"_casts"][dept] = {A:[...(ids as number[])],B:[...(ids as number[])],...p.data[section+"_casts"][dept]};
+      }
       return p;
     }),
     [section, setSection] = useState("Основное"),
@@ -116,6 +122,8 @@ export default function PassportEditor({
       let node = next.data;
       for (const k of path.slice(0, -1)) node = node[k];
       node[path[path.length - 1]] = value;
+      if (path[0] === "roles" && ["A","B"].includes(String(path[path.length-1])) && value)
+        node.eligible = [...new Set([...(node.eligible || []),value])];
       return next;
     });
   const candidates = (path: (string | number)[]) => {
@@ -158,6 +166,14 @@ export default function PassportEditor({
     const key = String(path[path.length - 1]),
       title = ru(labels[key] || key),
       opts = candidates(path);
+    if (path.length === 1 && ["groups","crew"].includes(key)) {
+      const casts=draft.data[key+"_casts"];
+      return <section key={key}><h3>{title}</h3>
+        {Object.keys(value).map(dept=><PeopleCastEditor key={dept} department={dept} resources={resources} casts={casts[dept] || {A:[],B:[]}} onChange={people=>change([key+"_casts"],{...casts,[dept]:people})}/>)}
+        <label className="field"><span>Добавить подразделение</span><select value="" onChange={e=>{if(e.target.value){change([key],{...value,[e.target.value]:[]});change([key+"_casts"],{...casts,[e.target.value]:{A:[],B:[]}});}}}>
+          <option value="">Выберите цех</option>{[...new Set(resources.filter(r=>r.kind==="Person").map(r=>r.department))].filter(d=>!(d in value)).map(d=><option key={d} value={d}>{d}</option>)}
+        </select></label></section>;
+    }
     if (path[0] === "scenes" && key === "roles" && Array.isArray(value))
       return (
         <label className="field" key={path.join(".")}>
@@ -356,7 +372,7 @@ export default function PassportEditor({
           onCreate={onCreate}
         />
       )}
-      {section === "Основное" && <p className="muted">Подготовка рассчитывается по этапам в разделе «Производство»; время переезда зависит от площадки. Для новой постановки сначала создайте площадку и сотрудников. Комплекты, помещения и транспорт можно добавить через каталог ресурсов.</p>}
+      {section === "Основное" && <p className="muted">Подготовка рассчитывается по этапам в разделе «Производство»; время переезда зависит от площадки. Постановку можно сохранить с неполным наполнением и дополнять по мере подготовки. Комплекты, помещения и транспорт можно добавить через каталог ресурсов.</p>}
       {sections[section].map((k: string) => field(draft.data[k], [k]))}
       {error && (
         <p role="alert" className="notice">

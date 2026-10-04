@@ -53,7 +53,8 @@ def validate_production(s, source, *, check_qualifications=True, allow_retired=F
         for rid in value:ref(rid,kinds)
     number(d['duration'],'Продолжительность, мин',15,480,True)
     if 'preparation' in d:number(d['preparation'],'Подготовка, мин',0,1440,True)
-    ref(d['home_venue'],['Venue'])
+    number(d['home_venue'],'Основная площадка',0,1000000000,True)
+    if d['home_venue']:ref(d['home_venue'],['Venue'])
     if d['vehicle']:ref(d['vehicle'],['Vehicle'])
     for group in ['responsibles','groups','crew','orchestra_versions','pipeline','overrides']:
         if not isinstance(d.get(group,{}),dict):raise ValueError('Раздел паспорта должен быть объектом: '+group)
@@ -68,14 +69,26 @@ def validate_production(s, source, *, check_qualifications=True, allow_retired=F
             qualification='Оркестр' if group=='orchestra_versions' else dept
             for rid in people:
                 if check_qualifications and qualification not in ref(rid,['Person']).data.get('qualification',[]):raise ValueError('Сотрудник не имеет квалификации: '+qualification)
+    for section in ['groups','crew']:
+        casts=d.get(section+'_casts',{})
+        if not isinstance(casts,dict):raise ValueError('Составы подразделений должны быть объектом')
+        for dept,options in casts.items():
+            if not isinstance(options,dict) or set(options)-{'A','B'}:raise ValueError('Допустимы первый и второй состав')
+            for people in options.values():
+                ids(people,['Person'])
+                for rid in people:
+                    if check_qualifications and dept not in ref(rid,['Person']).data.get('qualification',[]):raise ValueError('Сотрудник не имеет квалификации: '+dept)
     if not isinstance(d['roles'],list) or not isinstance(d['scenes'],list):raise ValueError('Роли и сцены должны быть списками')
     for role in d['roles']:
         if not isinstance(role,dict) or not str(role.get('role','')).strip():raise ValueError('Укажите название роли')
         for key in ['A','B']:
-            person=ref(role.get(key),['Person'])
+            number(role.get(key,0),'Исполнитель состава',0,1000000000,True)
+            role.setdefault(key,0)
+            if not role[key]:continue
+            person=ref(role[key],['Person'])
             if check_qualifications and 'Артисты' not in person.data.get('qualification',[]):raise ValueError('Исполнитель роли должен иметь квалификацию артиста')
         ids(role.get('eligible'),['Person'])
-        if role['A'] not in role['eligible'] or role['B'] not in role['eligible']:raise ValueError('Оба состава роли должны входить в допущенных исполнителей')
+        if any(role[key] and role[key] not in role['eligible'] for key in ['A','B']):raise ValueError('Назначенные исполнители должны входить в допущенных исполнителей')
         for rid in role['eligible']:
             if check_qualifications and 'Артисты' not in ref(rid,['Person']).data.get('qualification',[]):raise ValueError('Резерв роли должен иметь квалификацию артиста')
     for key,kinds in [('equipment_kits',['Equipment Kit']),('scenery',['Scenery']),('props',['Prop','Costume']),('items',['Equipment','Scenery','Prop','Costume'])]:ids(d.get(key,[]),kinds)
@@ -108,4 +121,15 @@ def referenced_ids(data):
     for k in ['equipment_kits','items','scenery','props']:out.update(data.get(k,[]))
     for vid,ov in data.get('overrides',{}).items():
         out.add(int(vid));out.update(ov.get('orchestra',[]));out.update(ov.get('scenery',[]))
-    return out
+    for section in ['groups','crew']:
+        for options in data.get(section+'_casts',{}).values():
+            for people in options.values():out.update(people)
+    return {rid for rid in out if isinstance(rid,int) and not isinstance(rid,bool) and rid>0}
+
+
+def cast_people(data, section, cast):
+    """Old passports use the same list in both casts; explicit empty casts stay empty."""
+    base=data.get(section,{})
+    overrides=data.get(section+'_casts',{})
+    return {dept:list(overrides.get(dept,{}).get(cast,base.get(dept,[])))
+            for dept in dict.fromkeys([*base,*overrides])}
