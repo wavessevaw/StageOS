@@ -91,7 +91,13 @@ def main():
     profile = ROOT.parent / "bootstrap-accounts.json"
     app = create_desktop_app(bootstrap_file=profile if profile.is_file() else None)
     if "--server" in sys.argv and app.state.network.config["mode"] != "server":
-        app.state.network.start_server(8765)
+        try:
+            app.state.network.start_server(8765)
+        except (OSError, RuntimeError, ValueError) as error:
+            # Keep the local UI available so the port/error can be fixed in-app.
+            app.state.network.error = str(error)
+            app.state.network.phase = "error"
+            app.state.network.record("error", str(error))
     listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     listener.bind(("127.0.0.1", 0))
     port = listener.getsockname()[1]

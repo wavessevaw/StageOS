@@ -1,6 +1,6 @@
 import React,{useState,useEffect} from 'react';
 import {tr,useLanguage,setLanguage} from './i18n';
-import {Connection,connectionApi} from './Connection';
+import {Connection,connectionApi,ServerIndicator} from './Connection';
 type Obj=Record<string,any>;
 export async function accountApi(path:string,method='GET',body?:any){
  const response=await fetch('/api/auth/'+path,{method,headers:{'Content-Type':'application/json','X-StageOS-Token':sessionStorage.getItem('stageos-token')||''},body:body===undefined?undefined:JSON.stringify(body)});
@@ -22,7 +22,7 @@ export function AccountGate({children}:{children:(session:Obj|null,exit:()=>Prom
   else {setSession(await accountApi('login','POST',{theatre_id:chosen!.id,login:form.login,password:form.password}));setForm(f=>({...f,password:''}));}
  }catch(e:any){setError(e.message)}finally{setBusy(false)}}
  if(networkOpen&&network)return <div className="account-gate"><Connection initial={network} onClose={()=>setNetworkOpen(false)}/></div>;
- if(ready&&(!enabled||session))return <>{children(enabled?session:null,exit)}</>;
+ if(ready&&(!enabled||session))return <>{children(enabled?session:null,exit)}{enabled&&<ServerIndicator/>}</>;
  return <div className="account-gate"><div className="account-brand"><img src="/stageos-icon.svg" width="52" height="52" alt=""/><strong>StageOS</strong><span>{tr('Театральное производство')}</span><select aria-label={tr('Язык приложения')} value={language} onChange={e=>setLanguage(e.target.value as 'ru'|'en')}><option value="ru">Русский</option><option value="en">English</option></select></div><section className={'account-panel '+(mode==='choose'?'account-choose':'')}>
  <span className="eyebrow">{tr(network?.mode==='client'?'Общее пространство сервера':'Локальные пространства')}</span><h1>{tr(mode==='choose'?'Выберите театр':mode==='create'?'Создать свой театр':mode==='setup'?'Настроить вход':'Вход в аккаунт')}</h1>
  {error&&<p role="alert" className="error-banner">{tr(error)}</p>}

@@ -4,6 +4,8 @@ Clients proxy API requests to the host; database files never leave the host
 except through the explicit administrator export command.
 """
 import base64
+from collections import deque
+from datetime import datetime, timezone
 import json
 import subprocess
 import sys
@@ -15,6 +17,7 @@ import time
 from pathlib import Path
 from urllib.parse import urlsplit
 
+import anyio
 import httpx
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request
@@ -40,8 +43,9 @@ def validate_address(value):
     return value
 
 class LanAccess:
-    def __init__(self, app, code, desktop_token):
+    def __init__(self, app, code, desktop_token, on_request=None):
         self.app, self.code, self.token = app, code, desktop_token
+        self.on_request=on_request
 
     async def __call__(self, scope, receive, send):
         if scope['type'] != 'http':
@@ -54,6 +58,7 @@ class LanAccess:
                 return await JSONResponse({'detail':'Неверный код подключения к серверу'},403)(scope,receive,send)
             if req.url.path in ('/api/auth/theatres',) and req.method == 'POST' or req.url.path.endswith('/setup'):
                 return await JSONResponse({'detail':'Создание театра и первый администратор доступны на компьютере сервера'},403)(scope,receive,send)
+            if self.on_request:self.on_request(scope.get('client',('unknown',0))[0])
             headers = [(k,v) for k,v in scope['headers'] if k.lower() != b'x-stageos-token']
             headers.append((b'x-stageos-token', self.token.encode()))
             scope = {**scope, 'headers': headers}
@@ -70,9 +75,54 @@ class NetworkController:
         self.lock = threading.RLock()
         self.server = self.thread = self.listener = None
         self.error = ''
+        self.phase='stopped'
+        self.logs=deque(maxlen=80)
+        self.log_lock=threading.Lock()
+        self.diagnostics_lock=threading.Lock()
+        self.diagnostics={'checked_at':None,'http_ok':None,'firewall':'unknown','profiles':[],'detail':''}
+        self.firewall_state='unknown'
+        self.remote_requests=0
+        self.last_remote=None
         if self.config['mode'] == 'server':
             try:self.start_server(self.config['port'])
-            except (OSError,RuntimeError) as error:self.error = str(error)
+            except (OSError,RuntimeError) as error:
+                self.error = str(error);self.phase='error';self.record('error',self.error)
+
+    def record(self,level,message):
+        with self.log_lock:
+            self.logs.append({'time':datetime.now(timezone.utc).isoformat(),'level':level,'message':message})
+
+    def observe_request(self,address):
+        with self.log_lock:
+            first=self.last_remote is None
+            self.remote_requests+=1
+            self.last_remote={'address':address,'time':datetime.now(timezone.utc).isoformat()}
+        if first:self.record('success','Получен первый сетевой запрос с верным кодом подключения')
+
+    def inspect(self):
+        with self.diagnostics_lock:
+            port=self.config['port']
+            result={'checked_at':datetime.now(timezone.utc).isoformat(),'http_ok':False,
+                    'firewall':'unknown','profiles':[],'detail':''}
+            if self.status()['running']:
+                try:
+                    response=httpx.get(f'http://127.0.0.1:{port}/api/network/hello',timeout=3,trust_env=False)
+                    result['http_ok']=response.status_code==200 and response.json().get('product')=='StageOS Server'
+                except (httpx.HTTPError,ValueError):pass
+            if os.name=='nt':
+                try:result.update(inspect_windows_network(port))
+                except (OSError,subprocess.TimeoutExpired,ValueError) as error:
+                    result['detail']='Не удалось проверить настройки сети Windows'
+            else:result['detail']='Проверка брандмауэра доступна только в Windows'
+            self.diagnostics=result
+            self.record('success' if result['http_ok'] else 'warning',
+                        'Проверка HTTP: сервер отвечает' if result['http_ok'] else 'Проверка HTTP: сервер не отвечает')
+            return result
+
+    def set_mode(self,mode,**values):
+        with self.lock:
+            if mode=='server':return self.start_server(values['port'])
+            self.stop_server();self.config.update(mode=mode,**values);self.error='';self.persist()
 
     def persist(self):
         tmp = self.path.with_suffix('.tmp')
@@ -83,20 +133,26 @@ class NetworkController:
         addresses = {'127.0.0.1'}
         try:addresses.update(socket.gethostbyname_ex(socket.gethostname())[2])
         except OSError:pass
-        return {**self.config,'enabled':True,'running':bool(self.server and self.server.started and self.thread.is_alive()),'addresses':[f'http://{a}:{self.config["port"]}' for a in sorted(addresses)],'error':self.error}
+        with self.log_lock:logs=list(self.logs);last_remote=self.last_remote;requests=self.remote_requests
+        server,thread=self.server,self.thread
+        return {**self.config,'phase':self.phase,'diagnostics':self.diagnostics,'firewall_state':self.firewall_state,'logs':logs,'last_remote':last_remote,'remote_requests':requests,'windows':os.name=='nt','enabled':True,'running':bool(server and thread and server.started and thread.is_alive()),'addresses':[f'http://{a}:{self.config["port"]}' for a in sorted(addresses)],'error':self.error}
 
     def start_server(self, port):
         if isinstance(port,bool) or not isinstance(port,int) or not 1024 <= port <= 65535:
             raise ValueError('Порт сервера: от 1024 до 65535')
         if self.config['mode']=='server' and self.config['port']==port and self.status()['running']:
+            self.record('info','Сервер уже работает. Повторный запуск не требуется')
             return
         self.stop_server()
+        self.phase='starting';self.record('info',f'Запуск сервера: порт {port}')
+        self.diagnostics={'checked_at':None,'http_ok':None,'firewall':'unknown','profiles':[],'detail':''}
         listener = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
         try:listener.bind(('0.0.0.0',port))
-        except Exception:listener.close();raise
+        except Exception as error:
+            listener.close();self.phase='error';self.error=str(error);self.record('error',self.error);raise
         old_code=self.config['code']
         if self.config['mode']!='server':self.config['code']=secrets.token_urlsafe(18)
-        app = LanAccess(self.workspace,self.config['code'],os.environ.get('STAGEOS_TOKEN',''))
+        app = LanAccess(self.workspace,self.config['code'],os.environ.get('STAGEOS_TOKEN',''),self.observe_request)
         server = uvicorn.Server(uvicorn.Config(app,host='0.0.0.0',port=port,log_level='warning',access_log=False,log_config=None))
         thread = threading.Thread(target=server.run,kwargs={'sockets':[listener]},daemon=True)
         self.listener,self.server,self.thread = listener,server,thread
@@ -107,13 +163,17 @@ class NetworkController:
             self.stop_server();self.config['code']=old_code;raise RuntimeError('Сервер не запустился. Проверьте порт.')
         self.config.update(mode='server',port=port,address='');self.error=''
         self.persist()
+        self.phase='running';self.record('success',f'Сервер запущен. Ожидание подключений на порту {port}')
 
     def stop_server(self):
+        was_running=bool(self.server)
         if self.server:self.server.should_exit=True
         if self.thread:self.thread.join(timeout=5)
         if self.thread and self.thread.is_alive():raise RuntimeError('Сервер ещё завершает запросы. Повторите позже.')
         if self.listener:self.listener.close()
         self.server=self.thread=self.listener=None
+        self.phase='stopped'
+        if was_running:self.record('info','Сервер остановлен')
 
 class ConnectionDispatch:
     def __init__(self, app, controller):self.app,self.c = app,controller
@@ -160,6 +220,9 @@ def create_desktop_app(home=None,static_dir=None,bootstrap_file=None):
     @app.get('/api/connection')
     def status():return controller.status()
 
+    @app.get('/api/connection/diagnostics')
+    def diagnostics():return controller.inspect()
+
     @app.post('/api/connection')
     async def configure(req:Request):
         body=await req.json()
@@ -178,22 +241,21 @@ def create_desktop_app(home=None,static_dir=None,bootstrap_file=None):
                     hello=await client.get(address+'/api/network/hello');hello.raise_for_status()
                     if hello.json().get('protocol')!=PROTOCOL or hello.json().get('product')!='StageOS Server':raise ValueError('Это не совместимый StageOS Server')
                     check=await client.get(address+'/api/auth/theatres',headers={'X-StageOS-Code':code});check.raise_for_status()
-                with controller.lock:
-                    controller.stop_server();controller.config.update(mode=mode,address=address,code=code);controller.error='';controller.persist()
+                await anyio.to_thread.run_sync(lambda:controller.set_mode(mode,address=address,code=code))
             elif mode=='server':
                 # Running host can only be managed by its logged-in administrator.
                 if controller.server:
                     user=workspace.state.registry.current(req)
                     if user['role']!='admin':raise HTTPException(403,'Требуются права администратора')
-                with controller.lock:controller.start_server(body.get('port',8765))
+                await anyio.to_thread.run_sync(lambda:controller.set_mode(mode,port=body.get('port',8765)))
             elif mode=='local':
                 if controller.server:
                     user=workspace.state.registry.current(req)
                     if user['role']!='admin':raise HTTPException(403,'Требуются права администратора')
-                with controller.lock:
-                    controller.stop_server();controller.config.update(mode=mode,address='');controller.error='';controller.persist()
+                await anyio.to_thread.run_sync(lambda:controller.set_mode(mode,address=''))
             else:raise ValueError('Выберите режим подключения')
-        except (ValueError,OSError) as error:raise HTTPException(422,str(error))
+        except (ValueError,OSError,RuntimeError) as error:
+            controller.record('error',str(error));raise HTTPException(422,str(error))
         except httpx.HTTPStatusError as error:
             raise HTTPException(422,'Неверный код подключения' if error.response.status_code==403 else 'Сервер отклонил подключение')
         except httpx.HTTPError:raise HTTPException(503,'Не удалось подключиться. Проверьте адрес, сеть и брандмауэр сервера.')
@@ -205,20 +267,32 @@ def create_desktop_app(home=None,static_dir=None,bootstrap_file=None):
         return result
 
     @app.post('/api/connection/firewall')
-    def firewall(req:Request):
+    def firewall(req:Request,body:dict|None=None):
         user=workspace.state.registry.current(req)
         if user['role']!='admin':raise HTTPException(403,'Требуются права администратора')
         if os.name!='nt':raise HTTPException(422,'Настройка брандмауэра доступна только в Windows')
         if not controller.server:raise HTTPException(422,'Сначала запустите сервер')
-        return run_firewall_setup(controller.config['port'])
+        interface_index=(body or {}).get('interface_index',0)
+        if isinstance(interface_index,bool) or not isinstance(interface_index,int) or not 0<=interface_index<=2147483647:
+            raise HTTPException(422,'Выберите сетевой адаптер')
+        controller.firewall_state='pending'
+        controller.record('info','Настройка брандмауэра: подтвердите запрос администратора Windows')
+        try:
+            result=run_firewall_setup(controller.config['port'],interface_index)
+        except HTTPException as error:
+            controller.firewall_state='error';controller.record('error',error.detail);raise
+        controller.firewall_state='success'
+        controller.record('success','Windows: правило брандмауэра создано и проверено')
+        controller.inspect()
+        return result
     return app
 
 
-def run_firewall_setup(port):
+def run_firewall_setup(port,interface_index=0):
     """Wait for elevated PowerShell and report its actual exit status to the UI."""
     script=Path(__file__).resolve().parent/'firewall.ps1'
     args=subprocess.list2cmdline(['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass',
-                                 '-File',str(script),'-Port',str(port),'-RuntimePath',sys.executable])
+                                 '-File',str(script),'-Port',str(port),'-RuntimePath',sys.executable,'-InterfaceIndex',str(interface_index)])
     quoted=args.replace("'", "''")
     command=("$ErrorActionPreference='Stop'; try { "
              " $p=Start-Process -FilePath 'powershell.exe' -Verb RunAs -WindowStyle Hidden "
@@ -236,3 +310,15 @@ def run_firewall_setup(port):
     if completed.returncode!=0:
         raise HTTPException(422,'Windows не подтвердила настройку брандмауэра. Разрешите запрос администратора и повторите. Подробности: app\\backend\\firewall-error.log в папке Windows-Portable.')
     return {'ok':True,'message':'Правило брандмауэра создано и проверено. Подключения разрешены в частной локальной сети. Вход в аккаунт сохранён.'}
+
+
+def inspect_windows_network(port):
+    script=Path(__file__).resolve().parent/'network_status.ps1'
+    result=subprocess.run(['powershell.exe','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass',
+                           '-File',str(script),'-Port',str(port),'-RuntimePath',sys.executable],
+                          capture_output=True,timeout=15,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+    if result.returncode:raise ValueError('Windows network query failed')
+    data=json.loads(result.stdout.decode('utf-8-sig'))
+    if not isinstance(data,dict) or not isinstance(data.get('profiles'),list) or data.get('firewall') not in ('allowed','missing','mismatch'):
+        raise ValueError('Invalid Windows network status')
+    return {key:data[key] for key in ('profiles','firewall')}

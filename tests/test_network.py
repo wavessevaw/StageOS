@@ -202,3 +202,66 @@ def test_firewall_never_reports_success_on_failure(monkeypatch,failure):
     monkeypatch.setattr(subprocess,'run',run)
     with pytest.raises(HTTPException) as error:run_firewall_setup(8765)
     assert error.value.status_code==422
+
+
+def test_live_status_and_http_probe(network):
+    host,local,clients,tid,address,code=network
+    check=local.get('/api/connection/diagnostics')
+    assert check.status_code==200 and check.json()['http_ok'] is True
+    state=local.get('/api/connection').json()
+    assert state['running'] and state['phase']=='running'
+    assert state['remote_requests']>0 and state['last_remote']['address']=='127.0.0.1'
+    assert any('сервер отвечает' in row['message'] for row in state['logs'])
+    assert code not in str(state['logs'])
+    local.post('/api/connection',json={'mode':'local'})
+    assert local.get('/api/connection/diagnostics').json()['http_ok'] is False
+    state=local.get('/api/connection').json()
+    assert not state['running'] and state['phase']=='stopped'
+
+
+def test_busy_port_has_visible_error(tmp_path,monkeypatch):
+    monkeypatch.delenv('STAGEOS_TOKEN',raising=False)
+    app=create_desktop_app(tmp_path);c=TestClient(app)
+    with socket.socket() as socket_owner:
+        socket_owner.bind(('0.0.0.0',0));socket_owner.listen()
+        r=c.post('/api/connection',json={'mode':'server','port':socket_owner.getsockname()[1]})
+        assert r.status_code==422
+    state=c.get('/api/connection').json()
+    assert not state['running'] and state['phase']=='error' and state['error']
+    assert state['logs'][-1]['level']=='error'
+
+
+def test_status_remains_responsive_during_start(tmp_path,monkeypatch):
+    import asyncio,threading
+    monkeypatch.delenv('STAGEOS_TOKEN',raising=False)
+    app=create_desktop_app(tmp_path);entered=threading.Event();release=threading.Event()
+    def slow_start(port):
+        app.state.network.phase='starting';entered.set();assert release.wait(5)
+    monkeypatch.setattr(app.state.network,'start_server',slow_start)
+    async def scenario():
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://testserver') as client:
+            start=asyncio.create_task(client.post('/api/connection',json={'mode':'server','port':8765}))
+            try:
+                assert await asyncio.to_thread(entered.wait,3)
+                result=await asyncio.wait_for(client.get('/api/connection'),1)
+                assert result.json()['phase']=='starting'
+            finally:release.set();await start
+    asyncio.run(scenario())
+
+
+def test_windows_scripts_create_and_inspect_real_rule():
+    import os,subprocess,sys,ctypes
+    from pathlib import Path
+    if os.name!='nt':pytest.skip('Requires Windows administrator runner')
+    if not ctypes.windll.shell32.IsUserAnAdmin():pytest.skip('Requires administrator privileges')
+    from backend.network import inspect_windows_network
+    with socket.socket() as probe:probe.bind(('127.0.0.1',0));port=probe.getsockname()[1]
+    script=Path(__file__).resolve().parents[1]/'backend/firewall.ps1'
+    try:
+        run=subprocess.run(['powershell.exe','-NoProfile','-ExecutionPolicy','Bypass','-File',str(script),'-Port',str(port),'-RuntimePath',sys.executable],capture_output=True,timeout=30)
+        assert run.returncode==0,run.stderr
+        result=inspect_windows_network(port)
+        assert result['firewall']=='allowed'
+        assert isinstance(result['profiles'],list)
+    finally:
+        subprocess.run(['powershell.exe','-NoProfile','-Command',f'Remove-NetFirewallRule -Name StageOS-Server-{port} -ErrorAction SilentlyContinue'],capture_output=True,timeout=30)

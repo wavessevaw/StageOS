@@ -1,0 +1,25 @@
+name: Проверка сервера и Windows-сети
+on:
+  push:
+    branches: [main]
+    paths: ['backend/network.py', 'backend/firewall.ps1', 'backend/network_status.ps1', 'tests/test_network.py', '.github/workflows/server-check.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows-network:
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: requirements-lock.txt
+      - run: python -m pip install -r requirements-lock.txt
+      - name: Реальный HTTP, аккаунты и правило брандмауэра Windows
+        shell: pwsh
+        run: |
+          python -m pytest tests/test_network.py tests/test_accounts.py -v -ra
+          if ($LASTEXITCODE -ne 0) { throw 'Server regression failed' }
