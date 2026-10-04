@@ -9,6 +9,8 @@ files=[(p,'StageOS/Windows-Portable/'+p.relative_to(PORTABLE).as_posix()) for p 
 for name in ['README_RU.md','RELEASE_AUDIT_RU.md','TEST_RESULTS.md','BUILD_RESULTS.md','THIRD_PARTY.md','release-test-results.txt','release-ui-results.txt','release-empty-ui-results.txt','release-static-results.txt','release-build-results.txt']:
  files.append((ROOT/name,'StageOS/'+name))
 files.append((ROOT/'database/stageos-empty.db','StageOS/database/stageos-empty.db'))
+if (ROOT/'GITHUB_RELEASE_BUILD.md').is_file():
+ files.append((ROOT/'GITHUB_RELEASE_BUILD.md','StageOS/GITHUB_RELEASE_BUILD.md'))
 manifest='\n'.join(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+n for p,n in files)+'\n'
 with ZipFile(OUT,'w',ZIP_DEFLATED,compresslevel=6) as z:
  for p,n in files:z.write(p,n)

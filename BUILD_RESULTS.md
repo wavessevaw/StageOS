@@ -9,3 +9,9 @@
 - Подпись EXE: отсутствует.
 
 Workflow GitHub Actions выполняет сборку на Windows, проверку встроенного Python/SQLite/CP-SAT и импорт CLR/WinForms. Его наличие не считается успешным выполнением. После зелёного CI всё равно нужна приёмка окна и закрытия процесса на Windows 10/11.
+
+## Подтверждённая Windows-сборка CI
+
+GitHub Actions, Windows Server 2022 x64: [запуск 37163168708](https://github.com/wavessevaw/StageOS/actions/runs/37163168708), коммит 5967c802b00279f3f41fcd0b620a8533306257f9. Portable собран; 74 backend-теста, встроенный CPython 3.12.10, SQLite, CP-SAT и сохранение события — PASS. CLR/WinForms import — PASS. Ошибки конфликтующих pins, старого кэша wheels и незакрытого SQLite-пула самотеста исправлены. Окно Windows 10/11: NOT TESTED.
+
+Публичная поставка собирается повторно релизным workflow; её собственный коммит и CI указаны в GITHUB_RELEASE_BUILD.md внутри ZIP.
