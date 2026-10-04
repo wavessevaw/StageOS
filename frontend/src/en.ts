@@ -463,3 +463,4 @@ Object.assign(english,{
  "Полный":"Full","Сокращённый":"Reduced","Выездной":"Touring","Черновик":"Draft","Планирование":"Planning","На согласовании":"Pending approval","Согласовано":"Approved","Отклонено":"Rejected","В работе":"In progress","Завершено":"Completed","Отменено":"Cancelled",
  "Другой сервер":"Custom endpoint","Комплект оборудования":"Equipment kit","Помещение":"Room","Декорация":"Scenery","Софит":"Lighting batten","Штанкет":"Fly bar","Световая позиция":"Lighting position"
 });
+Object.assign(english,{"сотрудник":"staff member","добавить сотрудника":"add staff member","Кто ведёт звук на Северном ветре?":"Who runs sound for this production?"});

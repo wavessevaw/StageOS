@@ -7,7 +7,7 @@ export default function ScheduleExport({date,filters,onClose,locale='ru'}:{date:
     <div className="modal-body"><p>{tr("Таблица по датам, площадкам и помещениям. Используются текущие фильтры календаря.")}</p>
       <div className="check-grid"><label className="field"><span>{tr("Начало периода")}</span><input type="date" value={start} onChange={e=>setStart(e.target.value)}/></label>
       <label className="field"><span>{tr("Конец периода")}</span><input type="date" value={end} onChange={e=>setEnd(e.target.value)}/></label>
-      <label className="field"><span>{tr("Формат файла")}</span><select value={format} onChange={e=>setFormat(e.target.value)}><option value="pdf">{tr("PDF")}</option><option value="png">{tr("PNG")}</option></select></label></div>
+      <label className="field"><span>{tr("Формат файла")}</span><select aria-label={tr("Формат файла")} value={format} onChange={e=>setFormat(e.target.value)}><option value="pdf">{tr("PDF")}</option><option value="png">{tr("PNG")}</option></select></label></div>
       <p className="muted">{tr("До 31 дня. Многостраничный PNG сохраняется архивом изображений. PDF содержит все страницы в одном файле.")}</p>
       <div className="toolbar"><label><input type="checkbox" checked={people} onChange={e=>setPeople(e.target.checked)}/>{tr(" Вызовы сотрудников")}</label><label><input type="checkbox" checked={tasks} onChange={e=>setTasks(e.target.checked)}/>{tr(" Производственный план")}</label><label><input type="checkbox" checked={notes} onChange={e=>setNotes(e.target.checked)}/>{tr(" Примечания")}</label></div>
       {tr(error && <p role="alert">{tr(error)}</p>)}

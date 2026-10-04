@@ -371,22 +371,23 @@ def create_app(engine=None, static_dir=None, demo_enabled=None):
         except ValueError:raise ValueError('Укажите даты в формате ГГГГ-ММ-ДД')
         if upper<lower or (upper-lower).days>30:raise ValueError('Выберите период от 1 до 31 дня')
         if format not in ['pdf','png'] or locale not in ['ru','en']:raise ValueError('Неверный формат или язык экспорта')
-        selected=events(start=start,end=(upper+timedelta(days=1)).isoformat(),person=person,venue=venue,production=production,equipment=equipment,department=department,kind=kind,q=q)
-        if len(selected)>500:raise ValueError('Слишком много событий: сократите период экспорта')
-        with Session() as s:
-            for event in selected:event['export_plan']=saved_event_plan(s,s.get(Event,event['id']))
-            resources=list(s.scalars(select(Resource)))
-            blocks=[]
-            if not production and not kind and not q:
-                for booking in s.scalars(select(Booking).where(Booking.event_id.is_(None),Booking.start<datetime.combine(upper+timedelta(days=1),datetime.min.time()),Booking.end>datetime.combine(lower,datetime.min.time()))):
-                    resource=s.get(Resource,booking.resource_id)
-                    if not resource:continue
-                    if person and resource.id!=person:continue
-                    if equipment and resource.id!=equipment:continue
-                    if department and resource.department!=department:continue
-                    if venue and resource.id!=venue and resource.data.get('venue_id')!=venue:continue
-                    blocks.append(serial(booking))
-            pages=build_pages(selected,resources,blocks,lower,upper,locale=locale,include_people=include_people,include_tasks=include_tasks,include_notes=include_notes)
+        with LOCK:
+            selected=events(start=start,end=(upper+timedelta(days=1)).isoformat(),person=person,venue=venue,production=production,equipment=equipment,department=department,kind=kind,q=q)
+            if len(selected)>500:raise ValueError('Слишком много событий: сократите период экспорта')
+            with Session() as s:
+                for event in selected:event['export_plan']=saved_event_plan(s,s.get(Event,event['id']))
+                resources=list(s.scalars(select(Resource)))
+                blocks=[]
+                if not production and not kind and not q:
+                    for booking in s.scalars(select(Booking).where(Booking.event_id.is_(None),Booking.start<datetime.combine(upper+timedelta(days=1),datetime.min.time()),Booking.end>datetime.combine(lower,datetime.min.time()))):
+                        resource=s.get(Resource,booking.resource_id)
+                        if not resource:continue
+                        if person and resource.id!=person:continue
+                        if equipment and resource.id!=equipment:continue
+                        if department and resource.department!=department:continue
+                        if venue and resource.id!=venue and resource.data.get('venue_id')!=venue:continue
+                        blocks.append(serial(booking))
+                pages=build_pages(selected,resources,blocks,lower,upper,locale=locale,include_people=include_people,include_tasks=include_tasks,include_notes=include_notes)
         content,mime,extension=export(pages,format)
         return Response(content,media_type=mime,headers={'Content-Disposition':f'attachment; filename="StageOS-schedule-{start}-{end}.{extension}"','Cache-Control':'no-store'})
 

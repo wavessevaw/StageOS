@@ -131,6 +131,7 @@ function App() {
     [view, setView] = useState("timeGridWeek"),
     [calDate, setCalDate] = useState(today),
     [showExport, setShowExport] = useState(false),
+    [calendarBusy, setCalendarBusy] = useState(false),
     [selected, setSelected] = useState<Obj | null>(null),
     [tab, setTab] = useState("Люди"),
     [find, setFind] = useState(""),
@@ -286,7 +287,7 @@ function App() {
     if (!boot?.initialized && page !== "Настройки") return;
     let cancelled = false;
     if (page === "Календарь") {
-      setBusy(true);
+      setCalendarBusy(true);
       const qs = new URLSearchParams(
         Object.entries(filter)
           .filter(([, v]) => v)
@@ -301,7 +302,7 @@ function App() {
         })
         .catch((e) => setError(ru(e.message)))
         .finally(() => {
-          if (!cancelled) setBusy(false);
+          if (!cancelled) setCalendarBusy(false);
         });
     }
     if (page === "Аналитика")
@@ -488,13 +489,13 @@ function App() {
       <label className="field">
         <span>{tr(ru(label))}</span>
         <select
-          aria-label={label}
+          aria-label={ru(label)}
           value={value ?? ""}
           onChange={(e) => onChange(e.target.value)}
         >
           {opts.map((o) => (
             <option key={o.id} value={o.id}>
-              {ru(o.name)}
+              {o.kind || typeof o.id === "number" ? o.name : ru(o.name)}
             </option>
           ))}
         </select>
@@ -1454,7 +1455,7 @@ function App() {
                       <option value="">{tr(ru(label))}</option>
                       {opts.map((o: Obj) => (
                         <option key={o.id} value={o.id}>
-                          {ru(o.name)}
+                          {o.kind || typeof o.id === "number" ? o.name : ru(o.name)}
                         </option>
                       ))}
                     </select>
@@ -1462,7 +1463,7 @@ function App() {
                   <button onClick={() => setFilter({})}>{tr("Сброс")}</button>
                 </div>
                 <div className="calendar-panel">
-                  {tr(busy && (
+                  {tr((busy || calendarBusy) && (
                     <div className="cal-loading">{tr("Обновляем расписание…")}</div>
                   ))}
                   {view === "production" ? (
@@ -1676,7 +1677,7 @@ function App() {
                 <div className="page-title">
                   <div>
                     <div className="eyebrow">{tr("РЕПЕРТУАР И ПРОИЗВОДСТВЕННЫЕ ПАСПОРТА")}</div>
-                    <h1>{selected?.name || "Постановки"}</h1>
+                    <h1>{selected?.name || tr("Постановки")}</h1>
                   </div>
                   {tr(selected && (
                     <button
@@ -2864,11 +2865,12 @@ function App() {
                 e.preventDefault();
                 run(async () => {
                   const r = resourceEditor;
+                  const department=departments.find(d=>ru(d)===r.department) || r.department;
                   const data = {
                     ...(r.data || {}),
                     ...(["Room","Vehicle"].includes(r.kind) ? {capacity:r.data?.capacity === "" ? 0 : (r.data?.capacity ?? 0)} : {}),
-                    specialization: r.specialization || r.department,
-                    qualification: [...new Set([...(r.data?.qualification || []), r.department, r.specialization || r.department])],
+                    specialization: r.specialization || department,
+                    qualification: [...new Set([...(r.data?.qualification || []), department, r.specialization || department])],
                   };
                   const result = await api(
                     "/resources" + (r.id ? "/" + r.id : ""),
@@ -2876,7 +2878,7 @@ function App() {
                     {
                       kind: r.kind,
                       name: r.name,
-                      department: r.department,
+                      department,
                       data,
                     },
                   );

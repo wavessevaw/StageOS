@@ -36,3 +36,16 @@ test('Venue numeric input clears without forced zero; resource department starts
   await page.getByRole('button',{name:'Добавить сотрудника',exact:true}).click();
   await expect(page.getByLabel('Подразделение',{exact:true})).toHaveValue('');
 });
+test('Leaving a loading calendar does not lock another page',async({page,request})=>{
+ await request.post('/api/demo');await page.goto('/');
+ let release:()=>void=()=>{},started:()=>void=()=>{};
+ const routed=new Promise<void>(resolve=>{started=resolve});
+ const gate=new Promise<void>(resolve=>{release=resolve});
+ await page.route('**/api/events?**',async route=>{started();await gate;await route.continue()});
+ await page.getByRole('button',{name:'Календарь',exact:true}).click();
+ await routed;
+ await page.getByRole('button',{name:'Помощник StageOS',exact:true}).click();
+ await page.getByRole('textbox').last().fill('Что сегодня?');
+ await expect(page.getByRole('button',{name:'Спросить',exact:true})).toBeEnabled();
+ release();
+});
