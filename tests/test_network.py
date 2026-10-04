@@ -99,6 +99,13 @@ def test_server_loss_and_bad_connection_do_not_copy_or_write(network):
     assert local.get('/api/bootstrap').json()['resources']==[]
     assert a.post('/api/connection',json={'mode':'local'}).status_code==200
     assert a.get('/api/auth/theatres').json()['theatres']==[]
+    # The native Server launcher also creates its own code when changing roles.
+    native=a.app.state.network
+    try:
+        native.start_server(int(address.rsplit(':',1)[1]))
+        assert native.config['code']!=code
+        assert native.status()['running']
+    finally:native.stop_server()
 
 @pytest.mark.parametrize('address',['ftp://host','http://user:pass@host','http://host/path','http://host:bad','http://host?token=abc'])
 def test_bad_address(address):

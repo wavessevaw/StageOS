@@ -89,6 +89,8 @@ class NetworkController:
         listener = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
         try:listener.bind(('0.0.0.0',port))
         except Exception:listener.close();raise
+        old_code=self.config['code']
+        if self.config['mode']!='server':self.config['code']=secrets.token_urlsafe(18)
         app = LanAccess(self.workspace,self.config['code'],os.environ.get('STAGEOS_TOKEN',''))
         server = uvicorn.Server(uvicorn.Config(app,host='0.0.0.0',port=port,log_level='warning',access_log=False,log_config=None))
         thread = threading.Thread(target=server.run,kwargs={'sockets':[listener]},daemon=True)
@@ -97,7 +99,7 @@ class NetworkController:
         deadline = time.monotonic()+10
         while not server.started and thread.is_alive() and time.monotonic()<deadline:time.sleep(.02)
         if not server.started:
-            self.stop_server();raise RuntimeError('Сервер не запустился. Проверьте порт.')
+            self.stop_server();self.config['code']=old_code;raise RuntimeError('Сервер не запустился. Проверьте порт.')
         self.config.update(mode='server',port=port,address='');self.error=''
         self.persist()
 
@@ -173,7 +175,6 @@ def create_desktop_app(home=None,static_dir=None,bootstrap_file=None):
                 with controller.lock:
                     controller.stop_server();controller.config.update(mode=mode,address=address,code=code);controller.error='';controller.persist()
             elif mode=='server':
-                if controller.config['mode']!='server':controller.config['code']=secrets.token_urlsafe(18)
                 # Running host can only be managed by its logged-in administrator.
                 if controller.server:
                     user=workspace.state.registry.current(req)
