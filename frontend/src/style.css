@@ -1400,3 +1400,5 @@ details > form {
 .field select[multiple] {
   min-height: 140px;
 }
+.language-switch { display:flex; align-items:center; gap:8px; color:var(--muted); font-size:12px; }
+.language-switch select { padding:7px 9px; width:auto; border-radius:9px; }

@@ -4,10 +4,13 @@ from zipfile import ZipFile, ZIP_DEFLATED
 import hashlib,json,sqlite3
 ROOT=Path(__file__).resolve().parent.parent
 PORTABLE=ROOT/'artifacts/StageOS-Portable'
-OUT=ROOT.parent/'StageOS-Release-1.0.0-rc.1.zip'
+VERSION=json.loads((ROOT/'frontend/package.json').read_text())['version']
+OUT=ROOT.parent/f'StageOS-Release-{VERSION}.zip'
 files=[(p,'StageOS/Windows-Portable/'+p.relative_to(PORTABLE).as_posix()) for p in sorted(PORTABLE.rglob('*')) if p.is_file() and '__pycache__' not in p.parts]
-for name in ['README_RU.md','RELEASE_AUDIT_RU.md','TEST_RESULTS.md','BUILD_RESULTS.md','THIRD_PARTY.md','release-test-results.txt','release-ui-results.txt','release-empty-ui-results.txt','release-static-results.txt','release-build-results.txt']:
+for name in ['README.md','README_EN.md','README_RU.md','ARCHITECTURE.md','RELEASE_GATE_1_0_RU.md','RELEASE_AUDIT_RU.md','TEST_RESULTS.md','BUILD_RESULTS.md','THIRD_PARTY.md','release-test-results.txt','release-ui-results.txt','release-empty-ui-results.txt','release-static-results.txt','release-build-results.txt']:
  files.append((ROOT/name,'StageOS/'+name))
+for p in sorted((ROOT/'docs/media').glob('*.svg')):files.append((p,'StageOS/docs/media/'+p.name))
+files.append((ROOT/'docs/SCHEDULE_MODEL_REVIEW_RU.md','StageOS/docs/SCHEDULE_MODEL_REVIEW_RU.md'))
 files.append((ROOT/'database/stageos-empty.db','StageOS/database/stageos-empty.db'))
 if (ROOT/'GITHUB_RELEASE_BUILD.md').is_file():
  files.append((ROOT/'GITHUB_RELEASE_BUILD.md','StageOS/GITHUB_RELEASE_BUILD.md'))

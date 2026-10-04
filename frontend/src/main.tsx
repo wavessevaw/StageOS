@@ -1,3 +1,4 @@
+import { tr, useLanguage, setLanguage, getLanguage, Language } from "./i18n";
 import React, { useState, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import FullCalendar from "@fullcalendar/react";
@@ -31,6 +32,7 @@ import {
 import "./style.css";
 import PassportEditor from "./PassportEditor";
 import VenueEditor from "./VenueEditor";
+import ScheduleExport from "./ScheduleExport";
 import { ru } from "./ru";
 type Obj = Record<string, any>;
 const initialToken = new URLSearchParams(location.search).get("token");
@@ -62,9 +64,9 @@ async function api(path: string, method = "GET", body?: any) {
   return res.json();
 }
 const time = (s: string) =>
-  new Date(s).toLocaleTimeString("ru", { hour: "2-digit", minute: "2-digit" });
+  new Date(s).toLocaleTimeString(getLanguage()==="en" ? "en-GB" : "ru-RU", { hour: "2-digit", minute: "2-digit" });
 const date = (s: string) =>
-  new Date(s).toLocaleDateString("ru", { day: "numeric", month: "long" });
+  new Date(s).toLocaleDateString(getLanguage()==="en" ? "en-GB" : "ru-RU", { day: "numeric", month: "long" });
 const local = (d: Date) =>
   new Date(d.getTime() - d.getTimezoneOffset() * 60000)
     .toISOString()
@@ -77,14 +79,14 @@ const statusLabels: Obj = {
 function Badge({ value }: { value: string }) {
   return (
     <span className={"badge " + value.toLowerCase()}>
-      {value === "READY"
+      {tr(value === "READY"
         ? "✓ "
         : value === "CONFLICT"
           ? "× "
           : value === "WARNING"
             ? "⚠ "
-            : ""}
-      {statusLabels[value] || ru(value)}
+            : "")}
+      {tr(statusLabels[value] || ru(value))}
     </span>
   );
 }
@@ -98,6 +100,12 @@ function shiftedStart(req: Obj, start: string): Obj {
 }
 const today = local(new Date()).slice(0,10);
 function App() {
+  const language=useLanguage();
+  const languageLoaded=useRef(false);
+  const changeLanguage=async(value:Language)=>{
+    try {await api("/settings/interface","PUT",{language:value});setLanguage(value);}
+    catch(e:any){setError(e.message);}
+  };
   const [boot, setBoot] = useState<Obj | null>(null),
     [error, setError] = useState(""),
     [page, setPage] = useState("Назначить"),
@@ -122,6 +130,7 @@ function App() {
     [filter, setFilter] = useState<Obj>({}),
     [view, setView] = useState("timeGridWeek"),
     [calDate, setCalDate] = useState(today),
+    [showExport, setShowExport] = useState(false),
     [selected, setSelected] = useState<Obj | null>(null),
     [tab, setTab] = useState("Люди"),
     [find, setFind] = useState(""),
@@ -213,6 +222,7 @@ function App() {
   async function load() {
     try {
       const b = await api("/bootstrap");
+      if (!languageLoaded.current){languageLoaded.current=true;if(b.language === "ru" || b.language === "en")setLanguage(b.language);}
       setBoot(b);
       if (!boot && b.demo_enabled) {
         setForm(f=>({...f,start:"2026-10-16T19:00:00"}));setCalDate("2026-10-16");
@@ -476,7 +486,7 @@ function App() {
   ) {
     return (
       <label className="field">
-        <span>{ru(label)}</span>
+        <span>{tr(ru(label))}</span>
         <select
           aria-label={label}
           value={value ?? ""}
@@ -494,55 +504,50 @@ function App() {
   function conflicts(p: Obj) {
     return (
       <div className="conflicts">
-        {p.conflicts.length === 0 ? (
+        {tr(p.conflicts.length === 0 ? (
           <div className="empty success">
-            <Check size={22} />
-            Пересечений и технических ограничений не найдено
-          </div>
+            <Check size={22} />{tr("Пересечений и технических ограничений не найдено")}</div>
         ) : (
           p.conflicts.map((c: Obj, i: number) => (
             <details className={"conflict " + c.severity.toLowerCase()} key={i}>
               <summary>
                 <AlertTriangle size={15} />
-                <b>{ru(c.resource)}</b>
-                <span>{ru(c.reason)}</span>
+                <b>{tr(ru(c.resource))}</b>
+                <span>{tr(ru(c.reason))}</span>
                 <Badge value={c.severity} />
               </summary>
               <div>
-                {c.current_event && (
-                  <p>
-                    Занят: {c.current_event} · {c.venue}
+                {tr(c.current_event && (
+                  <p>{tr("Занят: ")}{tr(c.current_event)}{tr(" · ")}{tr(c.venue)}
                   </p>
-                )}
-                {c.busy && (
+                ))}
+                {tr(c.busy && (
                   <p>
-                    {date(c.busy[0])} {time(c.busy[0])}–{time(c.busy[1])} ·
-                    требуется {time(c.required[0])}–{time(c.required[1])}
+                    {tr(date(c.busy[0]))} {tr(time(c.busy[0]))}{tr("–")}{tr(time(c.busy[1]))}{tr(" · требуется ")}{tr(time(c.required[0]))}{tr("–")}{tr(time(c.required[1]))}
                   </p>
-                )}
-                {c.overlap && (
-                  <p>
-                    Пересечение: {time(c.overlap[0])}–{time(c.overlap[1])}
+                ))}
+                {tr(c.overlap && (
+                  <p>{tr("Пересечение: ")}{tr(time(c.overlap[0]))}{tr("–")}{tr(time(c.overlap[1]))}
                   </p>
-                )}
-                <p>{ru(c.solutions.join(" · "))}</p>
+                ))}
+                <p>{tr(ru(c.solutions.join(" · ")))}</p>
               </div>
             </details>
           ))
-        )}
+        ))}
       </div>
     );
   }
   function timeline(tasks: Obj[]) {
-    if (!tasks.length) return <p>Нет задач</p>;
+    if (!tasks.length) return <p>{tr("Нет задач")}</p>;
     const min = Math.min(...tasks.map((t) => +new Date(t.start))),
       max = Math.max(...tasks.map((t) => +new Date(t.end)));
     return (
       <div className="timeline">
         <div className="timeline-axis">
-          <span>{time(new Date(min).toISOString())}</span>
-          <span>{time(new Date((max + min) / 2).toISOString())}</span>
-          <span>{time(new Date(max).toISOString())}</span>
+          <span>{tr(time(new Date(min).toISOString()))}</span>
+          <span>{tr(time(new Date((max + min) / 2).toISOString()))}</span>
+          <span>{tr(time(new Date(max).toISOString()))}</span>
         </div>
         {tasks.map((t, i) => (
           <div className="timeline-row" key={i}>
@@ -564,7 +569,7 @@ function App() {
               />
             </div>
             <small>
-              {time(t.start)}–{time(t.end)}
+              {tr(time(t.start))}{tr("–")}{tr(time(t.end))}
             </small>
           </div>
         ))}
@@ -576,25 +581,25 @@ function App() {
       <>
         <div className="metrics">
           <div>
-            <small>СОСТОЯНИЕ</small>
+            <small>{tr("СОСТОЯНИЕ")}</small>
             <Badge value={p.status} />
           </div>
           <div>
-            <small>УЧАСТНИКОВ</small>
-            <b>{p.assignments.length}</b>
+            <small>{tr("УЧАСТНИКОВ")}</small>
+            <b>{tr(p.assignments.length)}</b>
           </div>
           <div>
-            <small>ПОДГОТОВКА С</small>
-            <b>{time(p.tasks[0].start)}</b>
+            <small>{tr("ПОДГОТОВКА С")}</small>
+            <b>{tr(time(p.tasks[0].start))}</b>
           </div>
           <div>
-            <small>КОНФИГУРАЦИЯ</small>
-            <b>{ru(p.compatibility.version)}</b>
+            <small>{tr("КОНФИГУРАЦИЯ")}</small>
+            <b>{tr(ru(p.compatibility.version))}</b>
           </div>
         </div>
         {p === preview && !p.demo_scenario ? (
           <label className="field">
-            <span>Примечание к событию</span>
+            <span>{tr("Примечание к событию")}</span>
             <textarea
               key={p.fingerprint + "notes"}
               defaultValue={p.request.notes || ""}
@@ -607,27 +612,25 @@ function App() {
         ) : (
           p.notes && (
             <section className="notice">
-              <h3>Примечание</h3>
+              <h3>{tr("Примечание")}</h3>
               {p.notes}
             </section>
           )
         )}
-        {p.request.force && (
-          <p className="notice">
-            Принудительное назначение. Конфликты сохранены и требуют решения.
-          </p>
-        )}
-        <h3>Ответственные и состав</h3>
+        {tr(p.request.force && (
+          <p className="notice">{tr("Принудительное назначение. Конфликты сохранены и требуют решения.")}</p>
+        ))}
+        <h3>{tr("Ответственные и состав")}</h3>
         <div className="accordion-grid">
           {[...new Set(p.assignments.map((a: Obj) => a.department))].map(
             (dep: any) => (
               <details key={dep}>
                 <summary>
-                  {ru(dep)}
+                  {tr(ru(dep))}
                   <span>
                     {
-                      p.assignments.filter((a: Obj) => a.department === dep)
-                        .length
+                      tr(p.assignments.filter((a: Obj) => a.department === dep)
+                        .length)
                     }
                   </span>
                 </summary>
@@ -636,14 +639,14 @@ function App() {
                   .map((a: Obj, i: number) => (
                     <div className="personline" key={i}>
                       <span>
-                        <b>{ru(a.actual)}</b>
+                        <b>{a.actual}</b>
                         <small>
-                          {ru(a.role)}
+                          {tr(ru(a.role))}
                           {a.responsible_id !== a.actual_id &&
                             " · ответственный: " + a.responsible}
                         </small>
                       </span>
-                      <time>{time(a.call)}</time>
+                      <time>{tr(time(a.call))}</time>
                       {p === preview && !p.demo_scenario && (
                         <select
                           aria-label={"Заменить " + a.actual}
@@ -668,8 +671,8 @@ function App() {
                             )
                             .map((r) => (
                               <option key={r.id} value={r.id}>
-                                {ru(r.name)}
-                                {r.id === a.responsible_id ? " · основной" : ""}
+                                {r.name}
+                                {tr(r.id === a.responsible_id ? " · основной" : "")}
                               </option>
                             ))}
                         </select>
@@ -680,40 +683,39 @@ function App() {
             ),
           )}
         </div>
-        <h3>Техническая совместимость</h3>
+        <h3>{tr("Техническая совместимость")}</h3>
         <div className="check-grid">
           {p.compatibility.checks.map((c: Obj) => (
             <div key={c.name} className={c.ok ? "ok" : "bad"}>
               <span>
-                {c.ok ? "✓" : "×"} {ru(c.name)}
+                {tr(c.ok ? "✓" : "×")} {ru(c.name)}
               </span>
               <small>
-                {c.required} / {c.available}
+                {tr(c.required)}{tr(" / ")}{tr(c.available)}
               </small>
             </div>
           ))}
         </div>
-        {p.compatibility.override && (
-          <p className="notice">{p.compatibility.override.note}</p>
-        )}
+        {tr(p.compatibility.override && (
+          <p className="notice">{tr(p.compatibility.override.note)}</p>
+        ))}
         <details>
-          <summary>
-            Техника и резервирования <span>{p.bookings.length}</span>
+          <summary>{tr("Техника и резервирования ")}<span>{tr(p.bookings.length)}</span>
           </summary>
           <div className="resource-tags">
             {p.bookings
               .filter((b: Obj) => b.kind !== "Person")
               .map((b: Obj) => (
                 <span key={b.resource_id}>
-                  {ru(b.name)} · {time(b.start)}–{time(b.end)}
+                  {ru(b.name)}{tr(" · ")}{tr(time(b.start))}{tr("–")}{tr(time(b.end))}
                 </span>
               ))}
           </div>
         </details>
-        <h3>Производственный план</h3>
+        <h3>{tr("Производственный план")}</h3>
         {p === preview && !p.demo_scenario && (
           <>
-            {p.request.kind !== "Репетиция" && (
+            {tr(p.request.kind !== "Репетиция" && (
               <label className="row">
                 <input
                   type="checkbox"
@@ -725,15 +727,9 @@ function App() {
                       task_overrides: {},
                     })
                   }
-                />
-                Прогон в день спектакля: 11:00–14:00, обед, вечерний сбор
-              </label>
-            )}
-            <p className="muted">
-              Измените начало или длительность этапа: зависимости и занятость
-              пересчитываются. Время спектакля остаётся фиксированным. Явно
-              заданные времена отмечены как закреплённые.
-            </p>
+                />{tr("Прогон в день спектакля: 11:00–14:00, обед, вечерний сбор")}</label>
+            ))}
+            <p className="muted">{tr("Измените начало или длительность этапа: зависимости и занятость пересчитываются. Время спектакля остаётся фиксированным. Явно заданные времена отмечены как закреплённые.")}</p>
             <div key={p.fingerprint} className="schedule-editor">
               {p.tasks.map((t: Obj) => (
                 <div className="schedule-row" key={t.name}>
@@ -796,7 +792,7 @@ function App() {
                       }
                     }}
                   />
-                  <small>до {time(t.end)}</small>
+                  <small>{tr("до ")}{tr(time(t.end))}</small>
                   {p.request.task_overrides?.[t.name] && (
                     <button
                       onClick={() => {
@@ -804,22 +800,18 @@ function App() {
                         delete o[t.name];
                         changePlan(p, { task_overrides: o });
                       }}
-                    >
-                      Снять закрепление
-                    </button>
+                    >{tr("Снять закрепление")}</button>
                   )}
                 </div>
               ))}
             </div>
           </>
         )}
-        {timeline(p.tasks)}
-        <h3>Конфликты и предупреждения · {p.conflicts.length}</h3>
-        {conflicts(p)}
-        <p className="muted">
-          Решатель: {ru(p.solver.status)} · Штраф мягких ограничений:{" "}
-          {p.penalty} · Предварительный план не изменяет расписание
-        </p>
+        {tr(timeline(p.tasks))}
+        <h3>{tr("Конфликты и предупреждения · ")}{tr(p.conflicts.length)}</h3>
+        {tr(conflicts(p))}
+        <p className="muted">{tr("Решатель: ")}{tr(ru(p.solver.status))}{tr(" · Штраф мягких ограничений:")}{tr(" ")}
+          {tr(p.penalty)}{tr(" · Предварительный план не изменяет расписание")}</p>
       </>
     );
   }
@@ -827,9 +819,9 @@ function App() {
     return (
       <div className="loading">
         <Layers />
-        <h2>StageOS</h2>
-        <p>{error || "Подключение к локальному ядру…"}</p>
-        <button onClick={load}>Повторить</button>
+        <h2>{tr("StageOS")}</h2>
+        <p>{tr(error || "Подключение к локальному ядру…")}</p>
+        <button onClick={load}>{tr("Повторить")}</button>
       </div>
     );
   return (
@@ -848,20 +840,19 @@ function App() {
           <div className="brandmark">
             <img src="/stageos-icon.svg" width={40} height={40} alt="" />
           </div>
-          <span>
-            Stage<span className="thin">OS</span>
-            <small>ТЕАТРАЛЬНОЕ ПРОИЗВОДСТВО</small>
+          <span>{tr("Stage")}<span className="thin">{tr("OS")}</span>
+            <small>{tr("ТЕАТРАЛЬНОЕ ПРОИЗВОДСТВО")}</small>
           </span>
         </div>
         <div className="theatre">
-          <span className="avatar">Т</span>
+          <span className="avatar">{tr("Т")}</span>
           <div>
-            {boot?.theatre_name || (boot?.demo_enabled ? "Демо театр" : "Рабочий театр")}<small>Локальное пространство</small>
+            {boot?.theatre_name || (boot?.demo_enabled ? "Демо театр" : "Рабочий театр")}<small>{tr("Локальное пространство")}</small>
           </div>
           <span className="online" />
         </div>
         <nav>
-          {nav.map(([name, Icon], i) => (
+          {tr(nav.map(([name, Icon], i) => (
             <button
               key={name}
               className={
@@ -870,63 +861,55 @@ function App() {
               onClick={() => go(name)}
             >
               <Icon size={18} />
-              {ru(name)}
-              {name === "Назначить" && <small>⌘ N</small>}
+              {tr(ru(name))}
+              {tr(name === "Назначить" && <small>{tr("⌘ N")}</small>)}
             </button>
-          ))}
+          )))}
         </nav>
         <div className="sidebar-bottom">
-          <span className="online" />
-          Локальная база данных<small>StageOS · 1.0.0-rc.1</small>
+          <span className="online" />{tr("Локальная база данных")}<small>{tr("StageOS · 1.0.0")}</small>
         </div>
       </aside>
       <main>
         <header>
           <div>
-            <span className="muted">Рабочее пространство</span>
+            <span className="muted">{tr("Рабочее пространство")}</span>
             <ChevronRight size={14} />
-            <b>{ru(page)}</b>
+            <b>{tr(ru(page))}</b>
           </div>
           <button className="search-btn" onClick={() => setPalette(true)}>
-            <Search size={15} />
-            Быстрый поиск<kbd>Ctrl K</kbd>
+            <Search size={15} />{tr("Быстрый поиск")}<kbd>{tr("Ctrl K")}</kbd>
           </button>
           <button
             className="icon"
-            aria-label="Уведомления"
+            aria-label={tr("Уведомления")}
             onClick={() => go("Уведомления")}
           >
             <Bell size={19} />
           </button>
-          <span className="avatar">АД</span>
+          <label className="language-switch"><span>{tr("Язык")}</span><select aria-label={tr("Язык приложения")} value={language} onChange={e=>changeLanguage(e.target.value as Language)}><option value="ru">Русский</option><option value="en">English</option></select></label>
+          <span className="avatar">{tr("АД")}</span>
         </header>
-        {error && (
+        {tr(error && (
           <div role="alert" className="error-banner">
-            {error}
+            {tr(error)}
             <button className="icon" onClick={() => setError("")}>
               <X size={16} />
             </button>
           </div>
-        )}
-        {toast && (
+        ))}
+        {tr(toast && (
           <div className="toast">
             <Check size={17} />
-            {toast}
+            {tr(toast)}
           </div>
-        )}
+        ))}
         {!boot.initialized && page !== "Настройки" ? (
           <section className="welcome">
-            <div className="eyebrow">ТЕАТР. ЛЮДИ. ТЕХНОЛОГИИ.</div>
-            <h1>
-              Добро пожаловать
-              <br />в StageOS.
-            </h1>
-            <p>
-              Всё, что нужно, чтобы поднять занавес.
-              <br />
-              Люди, площадки и производство — в одном расписании.
-            </p>
-            {!boot.demo_enabled && <label className="field"><span>Название театра</span><input maxLength={200} value={theatreName} onChange={e=>setTheatreName(e.target.value)} /></label>}
+            <div className="eyebrow">{tr("ТЕАТР. ЛЮДИ. ТЕХНОЛОГИИ.")}</div>
+            <h1>{tr("Добро пожаловать")}<br />{tr("в StageOS.")}</h1>
+            <p>{tr("Всё, что нужно, чтобы поднять занавес.")}<br />{tr("Люди, площадки и производство — в одном расписании.")}</p>
+            {tr(!boot.demo_enabled && <label className="field"><span>{tr("Название театра")}</span><input maxLength={200} value={theatreName} onChange={e=>setTheatreName(e.target.value)} /></label>)}
             <button
               className="primary"
               disabled={busy || (!boot.demo_enabled && !theatreName.trim())}
@@ -938,7 +921,7 @@ function App() {
                 })
               }
             >
-              {busy ? "Создаём театр…" : boot.demo_enabled ? "Создать демонстрационный театр" : "Создать рабочую базу"}
+              {tr(busy ? "Создаём театр…" : boot.demo_enabled ? "Создать демонстрационный театр" : "Создать рабочую базу")}
               <ArrowRight size={18} />
             </button>
             <div className="row">
@@ -946,17 +929,10 @@ function App() {
                 onClick={() =>
                   document.getElementById("database-upload")?.click()
                 }
-              >
-                Открыть существующую базу
-              </button>
-              <button onClick={() => go("Настройки")}>
-                Настроить локального помощника
-              </button>
+              >{tr("Открыть существующую базу")}</button>
+              <button onClick={() => go("Настройки")}>{tr("Настроить локального помощника")}</button>
             </div>
-            <p className="muted">
-              Данные хранятся на этом компьютере. Основные функции работают без
-              интернета и без ИИ.
-            </p>
+            <p className="muted">{tr("Данные хранятся на этом компьютере. Основные функции работают без интернета и без ИИ.")}</p>
           </section>
         ) : (
           <div className="content">
@@ -964,43 +940,38 @@ function App() {
               <>
                 <div className="page-title">
                   <div>
-                    <div className="eyebrow">ПЛАНИРОВАНИЕ БЕЗ ЛИШНИХ ШАГОВ</div>
+                    <div className="eyebrow">{tr("ПЛАНИРОВАНИЕ БЕЗ ЛИШНИХ ШАГОВ")}</div>
                     <h1>
-                      {form.event_id ? "Изменить событие" : "Поднимем занавес."}
+                      {tr(form.event_id ? "Изменить событие" : "Поднимем занавес.")}
                     </h1>
-                    <p>
-                      Выберите главное. StageOS проверит людей, технику и
-                      площадку.
-                    </p>
+                    <p>{tr("Выберите главное. StageOS проверит людей, технику и площадку.")}</p>
                   </div>
                   <span className="pill">
-                    <span className="online" />
-                    Производственный движок
-                  </span>
+                    <span className="online" />{tr("Производственный движок")}</span>
                 </div>
-                {(!productions.length || !resources.some(r => r.kind === "Venue")) && <p className="notice">Для назначения создайте площадку и постановку. Сотрудников добавьте в разделе «Сотрудники», затем выберите их в паспорте постановки.</p>}
+                {tr((!productions.length || !resources.some(r => r.kind === "Venue")) && <p className="notice">{tr("Для назначения создайте площадку и постановку. Сотрудников добавьте в разделе «Сотрудники», затем выберите их в паспорте постановки.")}</p>)}
                 <div className="assign-card">
                   <div className="segmented">
-                    {["Спектакль", "Репетиция"].map((k) => (
+                    {tr(["Спектакль", "Репетиция"].map((k) => (
                       <button
                         className={form.kind === k ? "chosen" : ""}
                         key={k}
                         onClick={() => update("kind", k)}
                       >
-                        {k === "Спектакль" ? (
+                        {tr(k === "Спектакль" ? (
                           <Clapperboard size={16} />
                         ) : (
                           <Users size={16} />
-                        )}{" "}
-                        {ru(k)}
+                        ))}{tr(" ")}
+                        {tr(ru(k))}
                       </button>
-                    ))}
+                    )))}
                   </div>
                   <div className="assign-form">
                     <label className="field">
-                      <span>Дата</span>
+                      <span>{tr("Дата")}</span>
                       <input
-                        aria-label="Дата"
+                        aria-label={tr("Дата")}
                         type="date"
                         value={form.start.slice(0, 10)}
                         onChange={(e) =>
@@ -1008,7 +979,7 @@ function App() {
                         }
                       />
                     </label>
-                    {picker(
+                    {tr(picker(
                       "Постановка",
                       "production_id",
                       productions,
@@ -1024,8 +995,8 @@ function App() {
                           rehearsal_items: [],
                         }));
                       },
-                    )}
-                    {picker(
+                    ))}
+                    {tr(picker(
                       "Состав",
                       "cast",
                       [
@@ -1034,8 +1005,8 @@ function App() {
                       ],
                       form.cast,
                       (v) => update("cast", v),
-                    )}
-                    {picker(
+                    ))}
+                    {tr(picker(
                       "Площадка",
                       "venue_id",
                       resources.filter(
@@ -1045,12 +1016,12 @@ function App() {
                       ),
                       form.venue_id,
                       (v) => update("venue_id", +v),
-                    )}
+                    ))}
                     <label className="field">
-                      <span>Начало</span>
+                      <span>{tr("Начало")}</span>
                       <input
                         type="time"
-                        aria-label="Начало"
+                        aria-label={tr("Начало")}
                         value={form.start.slice(11, 16)}
                         onChange={(e) =>
                           update(
@@ -1063,8 +1034,7 @@ function App() {
                   </div>
                   {form.kind === "Репетиция" && (
                     <div className="row rehearsal">
-                      <label>
-                        Длительность, мин{" "}
+                      <label>{tr("Длительность, мин")}{tr(" ")}
                         <input
                           type="number"
                           min="15"
@@ -1087,12 +1057,12 @@ function App() {
                               )
                             }
                           />
-                          {ru(s.name)}
+                          {s.name}
                         </label>
                       ))}
                     </div>
                   )}
-                  {form.kind !== "Репетиция" && (
+                  {tr(form.kind !== "Репетиция" && (
                     <label className="row">
                       <input
                         type="checkbox"
@@ -1100,17 +1070,15 @@ function App() {
                         onChange={(e) =>
                           update("run_through", e.target.checked)
                         }
-                      />
-                      Прогон на площадке в день спектакля (начало в 11:00)
-                    </label>
-                  )}
+                      />{tr("Прогон на площадке в день спектакля (начало в 11:00)")}</label>
+                  ))}
                   <label className="field">
-                    <span>Примечание к событию</span>
+                    <span>{tr("Примечание к событию")}</span>
                     <textarea
                       maxLength={8000}
                       value={form.notes || ""}
                       onChange={(e) => update("notes", e.target.value)}
-                      placeholder="Пометки для помрежа и служб"
+                      placeholder={tr("Пометки для помрежа и служб")}
                     />
                   </label>
                   <div className="assign-footer">
@@ -1119,28 +1087,25 @@ function App() {
                         type="checkbox"
                         checked={form.adaptation}
                         onChange={(e) => update("adaptation", e.target.checked)}
-                      />{" "}
-                      Использовать согласованную адаптацию площадки
-                    </label>
+                      />{tr(" ")}{tr("Использовать согласованную адаптацию площадки")}</label>
                     <button
                       className="primary"
                       disabled={busy || !live || !form.production_id || !form.venue_id}
                       onClick={() => analyze()}
-                    >
-                      Проверить и назначить <ArrowRight size={17} />
+                    >{tr("Проверить и назначить ")}<ArrowRight size={17} />
                     </button>
                   </div>
                 </div>
                 <div className="section-title">
-                  <h3>Всё под контролем</h3>
+                  <h3>{tr("Всё под контролем")}</h3>
                   <span className="muted">
-                    {live
+                    {tr(live
                       ? "Проверено по локальной базе"
-                      : "Проверяем доступность…"}
+                      : "Проверяем доступность…")}
                   </span>
                 </div>
                 <div className="validation-grid">
-                  {[
+                  {tr([
                     "Артисты",
                     "Режиссёр",
                     "Помреж",
@@ -1225,29 +1190,26 @@ function App() {
                             setRehearsalDept(d);
                         }}
                       >
-                        <span>{ru(d)}</span>
+                        <span>{tr(ru(d))}</span>
                         <span>
-                          {st === "wait"
+                          {tr(st === "wait"
                             ? "…"
                             : st === "ok"
                               ? "✓"
                               : st === "warn"
                                 ? "⚠"
-                                : "×"}
+                                : "×")}
                         </span>
                       </div>
                     );
-                  })}
+                  }))}
                 </div>
                 {form.kind === "Репетиция" && (
                   <section className="panel">
-                    <h3>Кто нужен на репетиции</h3>
-                    <p>
-                      Выберите цех и конкретных людей. В расписание попадут
-                      только выбранные участники.
-                    </p>
+                    <h3>{tr("Кто нужен на репетиции")}</h3>
+                    <p>{tr("Выберите цех и конкретных людей. В расписание попадут только выбранные участники.")}</p>
                     <div className="toolbar">
-                      {departments.map((d) => (
+                      {tr(departments.map((d) => (
                         <button
                           key={d}
                           className={d === rehearsalDept ? "primary" : ""}
@@ -1257,25 +1219,20 @@ function App() {
                               update("rehearsal_people", []);
                           }}
                         >
-                          {ru(d)}
+                          {tr(ru(d))}
                         </button>
-                      ))}
+                      )))}
                     </div>
                     <div className="row">
-                      <button onClick={() => update("rehearsal_people", null)}>
-                        Состав постановки автоматически
-                      </button>
-                      <button onClick={() => update("rehearsal_people", [])}>
-                        Очистить выбор
-                      </button>
-                      <b>
-                        Выбрано:{" "}
+                      <button onClick={() => update("rehearsal_people", null)}>{tr("Состав постановки автоматически")}</button>
+                      <button onClick={() => update("rehearsal_people", [])}>{tr("Очистить выбор")}</button>
+                      <b>{tr("Выбрано:")}{tr(" ")}
                         {
-                          (
+                          tr((
                             form.rehearsal_people ??
                             live?.assignments.map((a: Obj) => a.actual_id) ??
                             []
-                          ).length
+                          ).length)
                         }
                       </b>
                     </div>
@@ -1313,8 +1270,8 @@ function App() {
                                   );
                                 }}
                               />
-                              {ru(r.name)}
-                              <small>{ru(r.data.specialization)}</small>
+                              {r.name}
+                              <small>{tr(ru(r.data.specialization))}</small>
                             </label>
                           ))}
                       </div>
@@ -1324,26 +1281,26 @@ function App() {
                 <div className="two-col">
                   <section className="panel">
                     <div className="section-title">
-                      <h3>Производственная версия</h3>
-                      {live && <Badge value={live.status} />}
+                      <h3>{tr("Производственная версия")}</h3>
+                      {tr(live && <Badge value={live.status} />)}
                     </div>
                     <h2>{ru(prod?.name)}</h2>
                     <p className="muted">
-                      {prod?.data.genre} · {prod?.data.duration} мин · версия{" "}
-                      {ru(prod?.version)}
+                      {tr(prod?.data.genre)}{tr(" · ")}{tr(prod?.data.duration)}{tr(" мин · версия")}{tr(" ")}
+                      {tr(ru(prod?.version))}
                     </p>
                     <div className="stats">
                       <div>
-                        <b>{live?.assignments.length || "—"}</b>
-                        <span>участников</span>
+                        <b>{tr(live?.assignments.length || "—")}</b>
+                        <span>{tr("участников")}</span>
                       </div>
                       <div>
-                        <b>{live ? time(live.tasks[0].start) : "—"}</b>
-                        <span>начало подготовки</span>
+                        <b>{tr(live ? time(live.tasks[0].start) : "—")}</b>
+                        <span>{tr("начало подготовки")}</span>
                       </div>
                       <div>
-                        <b>{live?.conflicts.length ?? "—"}</b>
-                        <span>замечаний</span>
+                        <b>{tr(live?.conflicts.length ?? "—")}</b>
+                        <span>{tr("замечаний")}</span>
                       </div>
                     </div>
                     <button
@@ -1351,22 +1308,17 @@ function App() {
                         go("Постановки");
                         setSelected(prod || null);
                       }}
-                    >
-                      Открыть постановку <MoveUpRight size={16} />
+                    >{tr("Открыть постановку ")}<MoveUpRight size={16} />
                     </button>
                   </section>
                   <section className="panel tinted">
-                    <div className="eyebrow">ПЛАН БЕЗ РИСКА</div>
-                    <h2>А если перенести?</h2>
-                    <p>
-                      Меняйте время, состав и площадку. Все варианты остаются
-                      предварительными до подтверждения.
-                    </p>
+                    <div className="eyebrow">{tr("ПЛАН БЕЗ РИСКА")}</div>
+                    <h2>{tr("А если перенести?")}</h2>
+                    <p>{tr("Меняйте время, состав и площадку. Все варианты остаются предварительными до подтверждения.")}</p>
                     <div className="row">
-                      <button onClick={() => analyze()}>
-                        Изменить <ArrowRight size={16} />
+                      <button onClick={() => analyze()}>{tr("Изменить ")}<ArrowRight size={16} />
                       </button>
-                      {form.kind === "Репетиция" && (
+                      {tr(form.kind === "Репетиция" && (
                         <button
                           disabled={busy}
                           onClick={() =>
@@ -1374,35 +1326,32 @@ function App() {
                               setWindows(await api("/windows", "POST", form)),
                             )
                           }
-                        >
-                          Найти 3 окна
-                        </button>
-                      )}
+                        >{tr("Найти 3 окна")}</button>
+                      ))}
                     </div>
-                    {windows.map((w) => (
+                    {tr(windows.map((w) => (
                       <button key={w.start} onClick={() => setForm(w.request)}>
-                        {date(w.start)} · {time(w.start)}
+                        {tr(date(w.start))}{tr(" · ")}{tr(time(w.start))}
                       </button>
-                    ))}
+                    )))}
                   </section>
                 </div>
-                {live && live.conflicts.length > 0 && (
+                {tr(live && live.conflicts.length > 0 && (
                   <section className="panel">
-                    <h3>Что требует внимания</h3>
-                    {conflicts(live)}
+                    <h3>{tr("Что требует внимания")}</h3>
+                    {tr(conflicts(live))}
                   </section>
-                )}
+                ))}
               </>
             )}
             {page === "Календарь" && (
               <>
                 <div className="page-title">
                   <div>
-                    <div className="eyebrow">
-                      ЛЮДИ И ПРОИЗВОДСТВО В ОДНОМ РИТМЕ
-                    </div>
-                    <h1>Календарь</h1>
+                    <div className="eyebrow">{tr("ЛЮДИ И ПРОИЗВОДСТВО В ОДНОМ РИТМЕ")}</div>
+                    <h1>{tr("Календарь")}</h1>
                   </div>
+                  <button onClick={()=>setShowExport(true)}>{tr("Экспорт расписания")}</button>
                   <button
                     className="primary"
                     onClick={() => {
@@ -1414,13 +1363,11 @@ function App() {
                       go("Назначить");
                     }}
                   >
-                    <Plus size={17} />
-                    Создать событие
-                  </button>
+                    <Plus size={17} />{tr("Создать событие")}</button>
                 </div>
                 <div className="calendar-tools">
                   <div className="segmented">
-                    {[
+                    {tr([
                       ["timeGridDay", "День"],
                       ["timeGridWeek", "Неделя"],
                       ["dayGridMonth", "Месяц"],
@@ -1440,14 +1387,14 @@ function App() {
 
                         }}
                       >
-                        {n}
+                        {tr(n)}
                       </button>
-                    ))}
+                    )))}
                   </div>
                   <label className="search-inline">
                     <Search size={16} />
                     <input
-                      placeholder="Найти в расписании"
+                      placeholder={tr("Найти в расписании")}
                       value={filter.q || ""}
                       onChange={(e) =>
                         setFilter({ ...filter, q: e.target.value })
@@ -1461,9 +1408,7 @@ function App() {
                       type="checkbox"
                       checked={showTasks}
                       onChange={(e) => setShowTasks(e.target.checked)}
-                    />
-                    Подготовка и выезды
-                  </label>
+                    />{tr("Подготовка и выезды")}</label>
                   <SlidersHorizontal size={16} />
                   {[
                     [
@@ -1506,7 +1451,7 @@ function App() {
                         setFilter({ ...filter, [key]: e.target.value })
                       }
                     >
-                      <option value="">{ru(label)}</option>
+                      <option value="">{tr(ru(label))}</option>
                       {opts.map((o: Obj) => (
                         <option key={o.id} value={o.id}>
                           {ru(o.name)}
@@ -1514,17 +1459,17 @@ function App() {
                       ))}
                     </select>
                   ))}
-                  <button onClick={() => setFilter({})}>Сброс</button>
+                  <button onClick={() => setFilter({})}>{tr("Сброс")}</button>
                 </div>
                 <div className="calendar-panel">
-                  {busy && (
-                    <div className="cal-loading">Обновляем расписание…</div>
-                  )}
+                  {tr(busy && (
+                    <div className="cal-loading">{tr("Обновляем расписание…")}</div>
+                  ))}
                   {view === "production" ? (
                     <>
                       <div className="row">
                         <input
-                          aria-label="Дата производства"
+                          aria-label={tr("Дата производства")}
                           type="date"
                           value={calDate}
                           onChange={(e) => {
@@ -1538,20 +1483,15 @@ function App() {
                           <section className="panel" key={e.id}>
                             <div className="section-title">
                               <h3>
-                                {e.title} · {date(e.start)}
+                                {e.title}{tr(" · ")}{tr(date(e.start))}
                               </h3>
-                              <button onClick={() => openEvent(e.id)}>
-                                Открыть
-                              </button>
+                              <button onClick={() => openEvent(e.id)}>{tr("Открыть")}</button>
                             </div>
-                            {timeline(e.tasks)}
+                            {tr(timeline(e.tasks))}
                           </section>
                         ))
                       ) : (
-                        <div className="empty">
-                          Выберите дату с событиями, чтобы увидеть
-                          производственную цепочку.
-                        </div>
+                        <div className="empty">{tr("Выберите дату с событиями, чтобы увидеть производственную цепочку.")}</div>
                       )}
                     </>
                   ) : (
@@ -1562,7 +1502,7 @@ function App() {
                         timeGridPlugin,
                         interactionPlugin,
                       ]}
-                      locale={ruLocale}
+                      locale={language === "ru" ? ruLocale : "en-gb"}
                       initialView={view}
                       initialDate={calDate}
                       firstDay={1}
@@ -1698,13 +1638,10 @@ function App() {
                     />
                   )}
                 </div>
-                <p className="muted">
-                  Перенос и изменение длительности сначала открывают
-                  Предварительный план. До подтверждения расписание не меняется.
-                </p>
+                <p className="muted">{tr("Перенос и изменение длительности сначала открывают Предварительный план. До подтверждения расписание не меняется.")}</p>
               </>
             )}
-            {(page === "Добавить спектакль" ||
+            {tr((page === "Добавить спектакль" ||
               (page === "Постановки" && passport)) &&
               passport && (
                 <PassportEditor
@@ -1733,33 +1670,25 @@ function App() {
                     setToast("Паспорт постановки сохранён");
                   }}
                 />
-              )}
+              ))}
             {page === "Постановки" && !passport && (
               <>
                 <div className="page-title">
                   <div>
-                    <div className="eyebrow">
-                      РЕПЕРТУАР И ПРОИЗВОДСТВЕННЫЕ ПАСПОРТА
-                    </div>
+                    <div className="eyebrow">{tr("РЕПЕРТУАР И ПРОИЗВОДСТВЕННЫЕ ПАСПОРТА")}</div>
                     <h1>{selected?.name || "Постановки"}</h1>
                   </div>
-                  {selected && (
+                  {tr(selected && (
                     <button
                       onClick={() =>
                         setPassport(JSON.parse(JSON.stringify(selected)))
                       }
-                    >
-                      Редактировать постановку
-                    </button>
-                  )}
-                  <button onClick={() => go("Добавить спектакль")}>
-                    Добавить спектакль
-                  </button>
-                  {selected && (
-                    <button onClick={() => setSelected(null)}>
-                      Все постановки
-                    </button>
-                  )}
+                    >{tr("Редактировать постановку")}</button>
+                  ))}
+                  <button onClick={() => go("Добавить спектакль")}>{tr("Добавить спектакль")}</button>
+                  {tr(selected && (
+                    <button onClick={() => setSelected(null)}>{tr("Все постановки")}</button>
+                  ))}
                 </div>
                 {!selected ? (
                   <div className="production-grid">
@@ -1773,18 +1702,16 @@ function App() {
                         }}
                       >
                         <div className={"poster poster" + i}>
-                          <span>СЦЕНА / {String(i + 1).padStart(2, "0")}</span>
+                          <span>{tr("СЦЕНА / ")}{tr(String(i + 1).padStart(2, "0"))}</span>
                           <div className="poster-orbit" />
                           <b>{ru(p.name)}</b>
                         </div>
                         <div className="production-caption">
-                          <span>{p.data.genre}</span>
+                          <span>{tr(p.data.genre)}</span>
                           <h3>{ru(p.name)}</h3>
                           <p>
-                            {p.data.duration} мин{" "}
-                            <span>
-                              Подготовка {Math.floor(p.data.preparation / 60)}:
-                              {String(p.data.preparation % 60).padStart(2, "0")}
+                            {tr(p.data.duration)}{tr(" мин")}{tr(" ")}
+                            <span>{tr("Подготовка ")}{tr(Math.floor(p.data.preparation / 60))}{tr(":")}{tr(String(p.data.preparation % 60).padStart(2, "0"))}
                             </span>
                           </p>
                           <div>
@@ -1801,19 +1728,19 @@ function App() {
                   <>
                     <div className="metrics">
                       <div>
-                        <small>ВЕРСИЯ</small>
-                        <b>{ru(selected.version)}</b>
+                        <small>{tr("ВЕРСИЯ")}</small>
+                        <b>{tr(ru(selected.version))}</b>
                       </div>
                       <div>
-                        <small>ПРОДОЛЖИТЕЛЬНОСТЬ</small>
-                        <b>{selected.data.duration} мин</b>
+                        <small>{tr("ПРОДОЛЖИТЕЛЬНОСТЬ")}</small>
+                        <b>{tr(selected.data.duration)}{tr(" мин")}</b>
                       </div>
                       <div>
-                        <small>БАЗОВАЯ ПОДГОТОВКА</small>
-                        <b>{selected.data.preparation} мин</b>
+                        <small>{tr("БАЗОВАЯ ПОДГОТОВКА")}</small>
+                        <b>{tr(selected.data.preparation)}{tr(" мин")}</b>
                       </div>
                       <div>
-                        <small>ОСНОВНАЯ ПЛОЩАДКА</small>
+                        <small>{tr("ОСНОВНАЯ ПЛОЩАДКА")}</small>
                         <b>{ru(resource(selected.data.home_venue)?.name)}</b>
                       </div>
                     </div>
@@ -1822,38 +1749,33 @@ function App() {
                         className={tab === "Люди" ? "chosen" : ""}
                         onClick={() => setTab("Люди")}
                       >
-                        <Users size={18} />
-                        Люди
-                      </button>
+                        <Users size={18} />{tr("Люди")}</button>
                       <button
                         className={tab === "Техника" ? "chosen" : ""}
                         onClick={() => setTab("Техника")}
                       >
-                        <Boxes size={18} />
-                        Техника
-                      </button>
+                        <Boxes size={18} />{tr("Техника")}</button>
                     </div>
                     {tab === "Люди" ? (
                       <div className="accordion-grid">
                         <details open>
-                          <summary>Артисты · составы A / B</summary>
+                          <summary>{tr("Артисты · составы A / B")}</summary>
                           {selected.data.roles.map((r: Obj) => (
                             <div className="cast-row" key={r.role}>
-                              <b>{ru(r.role)}</b>
-                              <span>A · {ru(resource(r.A)?.name)}</span>
-                              <span>B · {ru(resource(r.B)?.name)}</span>
-                              <small>
-                                Резерв · {ru(resource(r.reserve)?.name)}
+                              <b>{tr(ru(r.role))}</b>
+                              <span>{tr("A · ")}{ru(resource(r.A)?.name)}</span>
+                              <span>{tr("B · ")}{ru(resource(r.B)?.name)}</span>
+                              <small>{tr("Резерв · ")}{ru(resource(r.reserve)?.name)}
                               </small>
                             </div>
                           ))}
                         </details>
                         <details open>
-                          <summary>Руководство и ответственные</summary>
+                          <summary>{tr("Руководство и ответственные")}</summary>
                           {Object.entries(selected.data.responsibles).map(
                             ([d, id]: any) => (
                               <div className="personline" key={d}>
-                                <span>{ru(d)}</span>
+                                <span>{tr(ru(d))}</span>
                                 <b>{ru(resource(id)?.name)}</b>
                               </div>
                             ),
@@ -1863,22 +1785,21 @@ function App() {
                           ([d, ids]: any) => (
                             <details key={d}>
                               <summary>
-                                {ru(d)}
-                                <span>{ids.length}</span>
+                                {tr(ru(d))}
+                                <span>{tr(ids.length)}</span>
                               </summary>
-                              {d === "Оркестр" &&
+                              {tr(d === "Оркестр" &&
                                 Object.entries(
                                   selected.data.orchestra_versions,
                                 ).map(([v, arr]: any) => (
                                   <p key={v}>
-                                    {ru(v)}: {arr.length} музыкантов
-                                  </p>
-                                ))}
-                              {selected.data.groups_casts?.[d] ? ["A","B"].map(cast=><section key={cast}><h4>{cast === "A" ? "Первый состав" : "Второй состав"}</h4>{(selected.data.groups_casts[d][cast] ?? ids).map((id:number)=><div className="personline" key={id}><span>{resource(id)?.name}</span><small>{ru(resource(id)?.data.specialization)}</small></div>)}</section>) : ids.map((id: number) => (
+                                    {tr(ru(v))}{tr(": ")}{tr(arr.length)}{tr(" музыкантов")}</p>
+                                )))}
+                              {selected.data.groups_casts?.[d] ? ["A","B"].map(cast=><section key={cast}><h4>{tr(cast === "A" ? "Первый состав" : "Второй состав")}</h4>{(selected.data.groups_casts[d][cast] ?? ids).map((id:number)=><div className="personline" key={id}><span>{resource(id)?.name}</span><small>{tr(ru(resource(id)?.data.specialization))}</small></div>)}</section>) : ids.map((id: number) => (
                                 <div className="personline" key={id}>
                                   <span>{ru(resource(id)?.name)}</span>
                                   <small>
-                                    {ru(resource(id)?.data.specialization)}
+                                    {tr(ru(resource(id)?.data.specialization))}
                                   </small>
                                 </div>
                               ))}
@@ -1888,15 +1809,13 @@ function App() {
                         {Object.entries(selected.data.crew).map(
                           ([d, ids]: any) => (
                             <details key={d + "crew"}>
-                              <summary>
-                                Техническая группа · {ru(d)}
-                                <span>{ids.length}</span>
+                              <summary>{tr("Техническая группа · ")}{tr(ru(d))}
+                                <span>{tr(ids.length)}</span>
                               </summary>
-                              {selected.data.crew_casts?.[d] ? ["A","B"].map(cast=><section key={cast}><h4>{cast === "A" ? "Первый состав" : "Второй состав"}</h4>{(selected.data.crew_casts[d][cast] ?? ids).map((id:number)=><div className="personline" key={id}><span>{resource(id)?.name}</span><small>{ru(resource(id)?.data.specialization)}</small></div>)}</section>) : ids.map((id: number) => (
+                              {selected.data.crew_casts?.[d] ? ["A","B"].map(cast=><section key={cast}><h4>{tr(cast === "A" ? "Первый состав" : "Второй состав")}</h4>{(selected.data.crew_casts[d][cast] ?? ids).map((id:number)=><div className="personline" key={id}><span>{resource(id)?.name}</span><small>{tr(ru(resource(id)?.data.specialization))}</small></div>)}</section>) : ids.map((id: number) => (
                                 <div className="personline" key={id}>
                                   {ru(resource(id)?.name)}
-                                  <small>
-                                    Квалификация {resource(id)?.data.level}
+                                  <small>{tr("Квалификация ")}{tr(resource(id)?.data.level)}
                                   </small>
                                 </div>
                               ))}
@@ -1911,11 +1830,11 @@ function App() {
                             <details open key={key}>
                               <summary>
                                 {
-                                  [
+                                  tr([
                                     "Декорации",
                                     "Реквизит и костюмы",
                                     "Звук · свет · видео",
-                                  ][i]
+                                  ][i])
                                 }
                               </summary>
                               {selected.data[key].map((id: number) => {
@@ -1925,11 +1844,9 @@ function App() {
                                     <b>{ru(r?.name)}</b>
                                     {r?.kind === "Scenery" ? (
                                       <p>
-                                        {r.data.width} × {r.data.depth} ×{" "}
-                                        {r.data.height} м · {r.data.mass} кг ·{" "}
-                                        {r.data.installation} · {r.data.crew}{" "}
-                                        монтажника
-                                      </p>
+                                        {tr(r.data.width)}{tr(" × ")}{tr(r.data.depth)}{tr(" ×")}{tr(" ")}
+                                        {tr(r.data.height)}{tr(" м · ")}{tr(r.data.mass)}{tr(" кг ·")}{tr(" ")}
+                                        {tr(r.data.installation)}{tr(" · ")}{tr(r.data.crew)}{tr(" ")}{tr("монтажника")}</p>
                                     ) : r?.kind === "Equipment Kit" ? (
                                       <p>
                                         {r.data.items
@@ -1937,9 +1854,7 @@ function App() {
                                           .join(" · ")}
                                       </p>
                                     ) : (
-                                      <p>
-                                        Критический · {r?.data.quantity} шт.
-                                      </p>
+                                      <p>{tr("Критический · ")}{tr(r?.data.quantity)}{tr(" шт.")}</p>
                                     )}
                                   </div>
                                 );
@@ -1948,10 +1863,10 @@ function App() {
                           ),
                         )}
                         <details open>
-                          <summary>Механика и световая инфраструктура</summary>
+                          <summary>{tr("Механика и световая инфраструктура")}</summary>
                           {!!selected.data.items?.length && (
                             <div className="panel">
-                              <h3>Поштучное имущество</h3>
+                              <h3>{tr("Поштучное имущество")}</h3>
                               {Object.entries(
                                 (selected.data.items as number[]).reduce(
                                   (groups: Obj, id: number) => {
@@ -1967,45 +1882,44 @@ function App() {
                                 ),
                               ).map(([name, count]) => (
                                 <p key={name}>
-                                  {ru(name)} — {String(count)} шт.
-                                </p>
+                                  {tr(ru(name))}{tr(" — ")}{tr(String(count))}{tr(" шт.")}</p>
                               ))}
                             </div>
                           )}
-                          {Object.entries(selected.data.requirements).map(
+                          {tr(Object.entries(selected.data.requirements).map(
                             ([k, v]: any) => (
                               <div className="personline" key={k}>
-                                <span>{ru(k)}</span>
-                                <b>{ru(v)}</b>
+                                <span>{tr(ru(k))}</span>
+                                <b>{tr(ru(v))}</b>
                               </div>
                             ),
-                          )}
+                          ))}
                         </details>
                         <details>
-                          <summary>Этапы подготовки</summary>
-                          {Object.entries(selected.data.pipeline).map(
+                          <summary>{tr("Этапы подготовки")}</summary>
+                          {tr(Object.entries(selected.data.pipeline).map(
                             ([k, v]: any) => (
                               <div className="personline" key={k}>
-                                <span>{ru(k)}</span>
-                                <b>{ru(v)} мин</b>
+                                <span>{tr(ru(k))}</span>
+                                <b>{tr(ru(v))}{tr(" мин")}</b>
                               </div>
                             ),
-                          )}
+                          ))}
                         </details>
                         <details>
-                          <summary>Адаптации площадок</summary>
+                          <summary>{tr("Адаптации площадок")}</summary>
                           {Object.entries(selected.data.overrides).length ? (
                             Object.entries(selected.data.overrides).map(
                               ([id, v]: any) => (
                                 <p key={id}>
-                                  {ru(resource(+id)?.name)} · {ru(v.version)}
+                                  {ru(resource(+id)?.name)}{tr(" · ")}{tr(ru(v.version))}
                                   <br />
-                                  {v.note}
+                                  {tr(v.note)}
                                 </p>
                               ),
                             )
                           ) : (
-                            <p>Отдельные адаптации не заданы</p>
+                            <p>{tr("Отдельные адаптации не заданы")}</p>
                           )}
                         </details>
                       </div>
@@ -2014,7 +1928,7 @@ function App() {
                 )}
               </>
             )}
-            {page === "Площадки" && venueEditor && (
+            {tr(page === "Площадки" && venueEditor && (
               <VenueEditor
                 initial={venueEditor}
                 onCancel={() => setVenueEditor(null)}
@@ -2030,7 +1944,7 @@ function App() {
                   setToast("Площадка сохранена");
                 }}
               />
-            )}
+            ))}
             {[
               "Сотрудники",
               "Оркестр",
@@ -2042,8 +1956,8 @@ function App() {
                 <>
                   <div className="page-title">
                     <div>
-                      <div className="eyebrow">ЕДИНАЯ БАЗА РЕСУРСОВ</div>
-                      <h1>{page}</h1>
+                      <div className="eyebrow">{tr("ЕДИНАЯ БАЗА РЕСУРСОВ")}</div>
+                      <h1>{tr(page)}</h1>
                     </div>
                     <button
                       onClick={() =>
@@ -2062,22 +1976,22 @@ function App() {
                       }
                     >
                       <Plus size={16} />
-                      {page === "Площадки"
+                      {tr(page === "Площадки"
                         ? "Добавить площадку"
                         : page === "Сотрудники"
                           ? "Добавить сотрудника"
-                          : "Добавить ресурс"}
+                          : "Добавить ресурс")}
                     </button>
                     <label className="search-inline">
                       <Search size={16} />
                       <input
-                        placeholder="Найти ресурс"
+                        placeholder={tr("Найти ресурс")}
                         value={find}
                         onChange={(e) => setFind(e.target.value)}
                       />
                     </label>
                   </div>
-                  {!selected &&
+                  {tr(!selected &&
                     ["Сотрудники", "Оборудование"].includes(page) && (
                       <section className="panel">
                         <div className="toolbar">
@@ -2086,10 +2000,8 @@ function App() {
                               setCatalogDept("");
                               setCatalogCategory("");
                             }}
-                          >
-                            Все цеха
-                          </button>
-                          {[
+                          >{tr("Все цеха")}</button>
+                          {tr([
                             ...new Set(
                               resources
                                 .filter((r) =>
@@ -2115,13 +2027,13 @@ function App() {
                                 setCatalogCategory("");
                               }}
                             >
-                              {ru(d)}
+                              {tr(ru(d))}
                             </button>
-                          ))}
+                          )))}
                         </div>
-                        {page === "Оборудование" && catalogDept && (
+                        {tr(page === "Оборудование" && catalogDept && (
                           <div className="toolbar">
-                            {[
+                            {tr([
                               ...new Set([
                                 ...(catalogDept === "Звук"
                                   ? ["Микрофоны", "Консоли", "Мониторы"]
@@ -2153,25 +2065,25 @@ function App() {
                                 }
                                 onClick={() => setCatalogCategory(c)}
                               >
-                                {ru(c)}
+                                {tr(ru(c))}
                               </button>
-                            ))}
+                            )))}
                           </div>
-                        )}
+                        ))}
                       </section>
-                    )}
+                    ))}
                   {selected ? (
                     <section className="panel">
                       <div className="section-title">
                         <h2>{ru(selected.name)}</h2>
-                        <button onClick={() => setSelected(null)}>Назад</button>
+                        <button onClick={() => setSelected(null)}>{tr("Назад")}</button>
                       </div>
-                      {selected.kind === "Person" && (
+                      {tr(selected.kind === "Person" && (
                         <>
-                          <h3>Статистика сотрудника · всё расписание</h3>
-                          {personStats ? (
+                          <h3>{tr("Статистика сотрудника · всё расписание")}</h3>
+                          {tr(personStats ? (
                             <div className="metrics">
-                              {Object.entries({
+                              {tr(Object.entries({
                                 Событий: personStats.events,
                                 "Часов занятости": personStats.hours,
                                 Спектаклей: personStats.performances,
@@ -2180,16 +2092,16 @@ function App() {
                                 "Интервалов отсутствия": personStats.absences,
                               }).map(([k, v]) => (
                                 <div key={k}>
-                                  <small>{ru(k)}</small>
-                                  <b>{ru(v)}</b>
+                                  <small>{tr(ru(k))}</small>
+                                  <b>{tr(ru(v))}</b>
                                 </div>
-                              ))}
+                              )))}
                             </div>
                           ) : (
-                            <p>Загрузка статистики…</p>
-                          )}
+                            <p>{tr("Загрузка статистики…")}</p>
+                          ))}
                         </>
-                      )}
+                      ))}
                       <div className="row">
                         <Badge value={selected.status} />
                         <button
@@ -2202,9 +2114,7 @@ function App() {
                                     selected.data.specialization || "",
                                 })
                           }
-                        >
-                          Редактировать
-                        </button>
+                        >{tr("Редактировать")}</button>
                         <button
                           onClick={() =>
                             run(async () => {
@@ -2214,14 +2124,10 @@ function App() {
                               setToast("Ресурс удалён");
                             })
                           }
-                        >
-                          Удалить
-                        </button>
-                        <button onClick={() => personal(selected)}>
-                          Показать в календаре
-                        </button>
+                        >{tr("Удалить")}</button>
+                        <button onClick={() => personal(selected)}>{tr("Показать в календаре")}</button>
                         <select
-                          aria-label="Состояние ресурса"
+                          aria-label={tr("Состояние ресурса")}
                           value={selected.status}
                           onChange={(e) =>
                             run(async () => {
@@ -2240,7 +2146,7 @@ function App() {
                             })
                           }
                         >
-                          {[
+                          {tr([
                             "available",
                             "reserved",
                             "in_use",
@@ -2250,15 +2156,15 @@ function App() {
                             "limited_use",
                           ].map((x) => (
                             <option key={x} value={x}>
-                              {ru(x)}
+                              {tr(ru(x))}
                             </option>
-                          ))}
+                          )))}
                         </select>
                       </div>
                       <div className="property-grid">
                         {Object.entries(selected.data).map(([k, v]: any) => (
                           <div key={k}>
-                            <small>{ru(k)}</small>
+                            <small>{tr(ru(k))}</small>
                             <b>
                               {Array.isArray(v)
                                 ? v
@@ -2271,7 +2177,7 @@ function App() {
                       </div>
                       {selected.kind === "Venue" && (
                         <>
-                          <h3>Механика и позиции</h3>
+                          <h3>{tr("Механика и позиции")}</h3>
                           <div className="resource-tags">
                             {resources
                               .filter((r) => r.data.venue_id === selected.id)
@@ -2280,13 +2186,13 @@ function App() {
                                   key={r.id}
                                   onClick={() => setSelected(r)}
                                 >
-                                  {ru(r.name)} · {ru(r.status)}
+                                  {r.name}{tr(" · ")}{tr(ru(r.status))}
                                 </button>
                               ))}
                           </div>
                         </>
                       )}
-                      <h3>Отсутствие / блокировка / обслуживание</h3>
+                      <h3>{tr("Отсутствие / блокировка / обслуживание")}</h3>
                       <form
                         className="row"
                         onSubmit={(e) => {
@@ -2308,27 +2214,23 @@ function App() {
                           });
                         }}
                       >
-                        <input required name="label" placeholder="Причина" />
+                        <input required name="label" placeholder={tr("Причина")} />
                         <input required name="start" type="datetime-local" />
                         <input required name="end" type="datetime-local" />
-                        <button type="submit">Сохранить</button>
+                        <button type="submit">{tr("Сохранить")}</button>
                       </form>
                     </section>
                   ) : (
                     <div className="resource-grid">
-                      {page === "Оборудование" &&
+                      {tr(page === "Оборудование" &&
                         catalogCategory &&
                         !resources.some(
                           (r) =>
                             r.department === catalogDept &&
                             equipmentCategory(r) === catalogCategory,
                         ) && (
-                          <p className="notice">
-                            В категории «{catalogCategory}» пока нет
-                            оборудования. Добавьте ресурс и укажите эту
-                            категорию.
-                          </p>
-                        )}
+                          <p className="notice">{tr("В категории «")}{tr(catalogCategory)}{tr("» пока нет оборудования. Добавьте ресурс и укажите эту категорию.")}</p>
+                        ))}
                       {resources
                         .filter(
                           (r) =>
@@ -2388,18 +2290,16 @@ function App() {
                               )}
                             </span>
                             <div>
-                              <h3>{ru(r.name)}</h3>
+                              <h3>{r.name}</h3>
                               <p>
-                                {ru(r.department)} ·{" "}
-                                {ru(r.data.specialization || r.kind)}
+                                {tr(ru(r.department))}{tr(" ·")}{tr(" ")}
+                                {tr(ru(r.data.specialization || r.kind))}
                               </p>
-                              {r.kind === "Venue" && (
+                              {tr(r.kind === "Venue" && (
                                 <small>
-                                  {r.data.width} × {r.data.depth} м ·{" "}
-                                  {r.data.soffits} софитов · {r.data.fly_bars}{" "}
-                                  штанкетов
-                                </small>
-                              )}
+                                  {tr(r.data.width)}{tr(" × ")}{tr(r.data.depth)}{tr(" м ·")}{tr(" ")}
+                                  {tr(r.data.soffits)}{tr(" софитов · ")}{tr(r.data.fly_bars)}{tr(" ")}{tr("штанкетов")}</small>
+                              ))}
                             </div>
                             <span className={"dot " + r.status} />
                           </button>
@@ -2410,33 +2310,33 @@ function App() {
               )}
             {page === "Аналитика" && analytics && (
               <>
-                <h1>Производство в цифрах</h1>
+                <h1>{tr("Производство в цифрах")}</h1>
                 <div className="metrics">
                   <div>
-                    <small>СОБЫТИЙ</small>
-                    <b>{analytics.events}</b>
+                    <small>{tr("СОБЫТИЙ")}</small>
+                    <b>{tr(analytics.events)}</b>
                   </div>
                   <div>
-                    <small>АДАПТАЦИЙ</small>
-                    <b>{analytics.adaptations}</b>
+                    <small>{tr("АДАПТАЦИЙ")}</small>
+                    <b>{tr(analytics.adaptations)}</b>
                   </div>
                   <div>
-                    <small>ЗАМЕН</small>
-                    <b>{analytics.replacements}</b>
+                    <small>{tr("ЗАМЕН")}</small>
+                    <b>{tr(analytics.replacements)}</b>
                   </div>
                   <div>
-                    <small>ЗАПИСЕЙ ФАКТА</small>
-                    <b>{analytics.actuals.length}</b>
+                    <small>{tr("ЗАПИСЕЙ ФАКТА")}</small>
+                    <b>{tr(analytics.actuals.length)}</b>
                   </div>
                 </div>
                 <div className="two-col">
                   <section className="panel">
-                    <h3>Занятость подразделений · ресурс-часы</h3>
-                    {Object.entries(analytics.departments)
+                    <h3>{tr("Занятость подразделений · ресурс-часы")}</h3>
+                    {tr(Object.entries(analytics.departments)
                       .filter(([k]) => k)
                       .map(([k, v]: any) => (
                         <div className="chart-row" key={k}>
-                          <span>{ru(k)}</span>
+                          <span>{tr(ru(k))}</span>
                           <div>
                             <i
                               style={{
@@ -2451,61 +2351,51 @@ function App() {
                               }}
                             />
                           </div>
-                          <b>{Math.round(v)}</b>
+                          <b>{tr(Math.round(v))}</b>
                         </div>
-                      ))}
+                      )))}
                   </section>
                   <section className="panel">
-                    <h3>Загрузка сотрудников</h3>
+                    <h3>{tr("Загрузка сотрудников")}</h3>
                     <div className="scroll-list">
                       {analytics.resources
                         .filter((r: Obj) => r.kind === "Person")
                         .map((r: Obj) => (
                           <div className="personline" key={r.id}>
                             <span>
-                              {ru(r.name)}
-                              <small>{ru(r.kind)}</small>
+                              {r.name}
+                              <small>{tr(ru(r.kind))}</small>
                             </span>
-                            <b>{r.hours} ч</b>
+                            <b>{tr(r.hours)}{tr(" ч")}</b>
                           </div>
                         ))}
                     </div>
                   </section>
                 </div>
                 <section className="panel">
-                  <h3>План / факт работ</h3>
+                  <h3>{tr("План / факт работ")}</h3>
                   {analytics.actuals.length ? (
                     analytics.actuals.map((a: Obj, i: number) => (
                       <p key={i}>
-                        {ru(a.name)}: план {a.planned} мин → факт {ru(a.actual)}{" "}
-                        мин
-                      </p>
+                        {ru(a.name)}{tr(": план ")}{tr(a.planned)}{tr(" мин → факт ")}{a.actual}{tr(" ")}{tr("мин")}</p>
                     ))
                   ) : (
-                    <p className="muted">
-                      Фактические интервалы пока не внесены. Откройте событие →
-                      Факт работ.
-                    </p>
+                    <p className="muted">{tr("Фактические интервалы пока не внесены. Откройте событие → Факт работ.")}</p>
                   )}
                 </section>
               </>
             )}
-            {page === "Stage Assistant" && (
+            {tr(page === "Stage Assistant" && (
               <section className="assistant panel">
                 <div className="assistant-icon">
                   <Sparkles size={30} />
                 </div>
-                <h1>Помощник StageOS</h1>
-                <p>
-                  Задайте вопрос о театре или предложите новое событие.
-                  <br />
-                  Модель использует данные StageOS; запись — только после вашего
-                  подтверждения.
-                </p>
+                <h1>{tr("Помощник StageOS")}</h1>
+                <p>{tr("Задайте вопрос о театре или предложите новое событие.")}<br />{tr("Модель использует данные StageOS; запись — только после вашего подтверждения.")}</p>
                 <textarea
                   value={question}
                   onChange={(e) => setQuestion(e.target.value)}
-                  placeholder="Кто ведёт звук на Северном ветре?"
+                  placeholder={tr("Кто ведёт звук на Северном ветре?")}
                 />
                 <button
                   className="primary"
@@ -2513,6 +2403,7 @@ function App() {
                   onClick={() =>
                     run(async () => {
                       const a = await api("/assistant", "POST", {
+                        language,
                         text: question,
                       });
                       setAnswer(a.answer);
@@ -2520,38 +2411,34 @@ function App() {
                     })
                   }
                 >
-                  {busy ? "Модель думает…" : "Спросить"}
+                  {tr(busy ? "Модель думает…" : "Спросить")}
                   <ArrowRight size={17} />
                 </button>
-                {answer && <div className="answer">{ru(answer)}</div>}
-                <button onClick={() => go("Настройки")}>
-                  Подключить локальную модель
-                </button>
+                {tr(answer && <div className="answer">{tr(ru(answer))}</div>)}
+                <button onClick={() => go("Настройки")}>{tr("Подключить локальную модель")}</button>
               </section>
-            )}
+            ))}
             {page === "Уведомления" && (
               <>
-                <h1>Уведомления и согласования</h1>
+                <h1>{tr("Уведомления и согласования")}</h1>
                 <section className="panel">
                   {notes.map((n) => (
                     <details key={n.id}>
                       <summary>
-                        <b>{ru(n.action)}</b>
+                        <b>{tr(ru(n.action))}</b>
                         <span>
-                          {date(n.created)} {time(n.created)}
+                          {tr(date(n.created))} {tr(time(n.created))}
                         </span>
-                        {n.data.state && <Badge value={n.data.state} />}
+                        {tr(n.data.state && <Badge value={n.data.state} />)}
                       </summary>
                       {n.action === "PROPOSED" ? (
                         <>
                           <p>
-                            {n.data.plan.title} · {date(n.data.plan.start)}
+                            {n.data.plan.title}{tr(" · ")}{tr(date(n.data.plan.start))}
                           </p>
-                          <button onClick={() => setPreview(n.data.plan)}>
-                            Посмотреть предложение
-                          </button>
-                          {n.data.reason && <p>{ru(n.data.reason)}</p>}
-                          {n.data.state === "Pending Approval" && (
+                          <button onClick={() => setPreview(n.data.plan)}>{tr("Посмотреть предложение")}</button>
+                          {tr(n.data.reason && <p>{tr(ru(n.data.reason))}</p>)}
+                          {tr(n.data.state === "Pending Approval" && (
                             <button
                               onClick={() =>
                                 run(async () => {
@@ -2564,11 +2451,9 @@ function App() {
                                   setToast("Предложение отклонено");
                                 })
                               }
-                            >
-                              Отклонить
-                            </button>
-                          )}
-                          {n.data.state === "Pending Approval" && (
+                            >{tr("Отклонить")}</button>
+                          ))}
+                          {tr(n.data.state === "Pending Approval" && (
                             <button
                               onClick={() =>
                                 run(async () => {
@@ -2580,17 +2465,15 @@ function App() {
                                   setToast("Предложение согласовано");
                                 })
                               }
-                            >
-                              Согласовать
-                            </button>
-                          )}
+                            >{tr("Согласовать")}</button>
+                          ))}
                         </>
                       ) : (
                         <p>
-                          {n.event_id
+                          {tr(n.event_id
                             ? "Событие № " + n.event_id
-                            : "Обновление ресурса"}
-                          {n.data.reason && " · " + n.data.reason}
+                            : "Обновление ресурса")}
+                          {tr(n.data.reason && " · " + n.data.reason)}
                         </p>
                       )}
                     </details>
@@ -2600,25 +2483,21 @@ function App() {
             )}
             {page === "Настройки" && settings && (
               <>
-                <h1>Настройки</h1>
+                <h1>{tr("Настройки")}</h1>
                 <section className="panel">
-                  <h3>База театра</h3>
+                  <h3>{tr("База театра")}</h3>
                   <div className="row">
-                    <button onClick={exportDatabase}>
-                      Скачать резервную копию
-                    </button>
+                    <button onClick={exportDatabase}>{tr("Скачать резервную копию")}</button>
                     <button
                       onClick={() =>
                         document.getElementById("database-upload")?.click()
                       }
-                    >
-                      Открыть существующую базу
-                    </button>
+                    >{tr("Открыть существующую базу")}</button>
                   </div>
                 </section>
                 <div className="two-col">
                   <section className="panel">
-                    <h3>Локальный помощник</h3>
+                    <h3>{tr("Локальный помощник")}</h3>
                     <label className="row">
                       <input
                         type="checkbox"
@@ -2629,10 +2508,8 @@ function App() {
                             enabled: e.target.checked,
                           })
                         }
-                      />
-                      Включить локального помощника
-                    </label>
-                    {picker(
+                      />{tr("Включить локального помощника")}</label>
+                    {tr(picker(
                       "Провайдер",
                       "provider",
                       ["Ollama", "LM Studio", "llama.cpp", "Custom"].map(
@@ -2650,9 +2527,9 @@ function App() {
                                 ? "http://127.0.0.1:1234/v1"
                                 : "http://127.0.0.1:8080/v1",
                         }),
-                    )}
+                    ))}
                     <label className="field">
-                      <span>Адрес сервера модели</span>
+                      <span>{tr("Адрес сервера модели")}</span>
                       <input
                         value={settings.endpoint}
                         onChange={(e) =>
@@ -2661,7 +2538,7 @@ function App() {
                       />
                     </label>
                     <label className="field">
-                      <span>Название модели</span>
+                      <span>{tr("Название модели")}</span>
                       <input
                         value={settings.model}
                         onChange={(e) =>
@@ -2678,23 +2555,14 @@ function App() {
                           setDiagnostics(await api("/diagnostics"));
                         })
                       }
-                    >
-                      Сохранить
-                    </button>
-                    <p className="muted">
-                      Основные функции не зависят от ИИ. При обращении к модели
-                      передаются данные сотрудников и расписания на указанный
-                      сервер.
-                    </p>
+                    >{tr("Сохранить")}</button>
+                    <p className="muted">{tr("Основные функции не зависят от ИИ. При обращении к модели передаются данные сотрудников и расписания на указанный сервер.")}</p>
                   </section>
                   <section className="panel">
-                    <h3>Диагностика</h3>
+                    <h3>{tr("Диагностика")}</h3>
                     {boot.demo_enabled && <details>
-                      <summary>24 демонстрационных конфликта</summary>
-                      <p className="muted">
-                        Каждый сценарий рассчитывается ядром в изолированной
-                        транзакции. Рабочая база не меняется.
-                      </p>
+                      <summary>{tr("24 демонстрационных конфликта")}</summary>
+                      <p className="muted">{tr("Каждый сценарий рассчитывается ядром в изолированной транзакции. Рабочая база не меняется.")}</p>
                       <div className="resource-tags">
                         {scenarios.map((c) => (
                           <button
@@ -2714,22 +2582,20 @@ function App() {
                       </div>
                     </details>
                     }
-                    {diagnostics &&
+                    {tr(diagnostics &&
                       Object.entries(diagnostics).map(([k, v]) => (
                         <div className="personline" key={k}>
-                          <span>{ru(k)}</span>
-                          <small>{ru(v)}</small>
+                          <span>{tr(ru(k))}</span>
+                          <small>{tr(ru(v))}</small>
                         </div>
-                      ))}
+                      )))}
                     <button
                       onClick={() =>
                         run(async () =>
                           setDiagnostics(await api("/diagnostics")),
                         )
                       }
-                    >
-                      Повторить проверку
-                    </button>
+                    >{tr("Повторить проверку")}</button>
                   </section>
                 </div>
               </>
@@ -2742,24 +2608,22 @@ function App() {
           <section
             className="modal preview-modal"
             role="dialog"
-            aria-label="Предварительный план"
+            aria-label={tr("Предварительный план")}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="modal-head">
               <div>
-                <div className="eyebrow">
-                  ПРЕДВАРИТЕЛЬНЫЙ ПРОСМОТР · НЕ СОХРАНЕНО
-                </div>
+                <div className="eyebrow">{tr("ПРЕДВАРИТЕЛЬНЫЙ ПРОСМОТР · НЕ СОХРАНЕНО")}</div>
                 <h2>{preview.title}</h2>
                 <p>
-                  {date(preview.start)} · {time(preview.start)} ·{" "}
-                  {preview.venue} · Состав{" "}
-                  {preview.request.cast === "A" ? "А" : "Б"}
+                  {tr(date(preview.start))}{tr(" · ")}{tr(time(preview.start))}{tr(" ·")}{tr(" ")}
+                  {tr(preview.venue)}{tr(" · Состав")}{tr(" ")}
+                  {tr(preview.request.cast === "A" ? "А" : "Б")}
                 </p>
               </div>
               <button
                 className="icon"
-                aria-label="Закрыть Предварительный план"
+                aria-label={tr("Закрыть Предварительный план")}
                 onClick={() => setPreview(null)}
               >
                 <X />
@@ -2767,13 +2631,10 @@ function App() {
             </div>
             <div className="modal-body">
               {preview.demo_scenario && (
-                <p className="notice">
-                  Демонстрационный сценарий: {ru(preview.demo_scenario.name)}.
-                  Изменения изолированы и не сохраняются.
-                </p>
+                <p className="notice">{tr("Демонстрационный сценарий: ")}{ru(preview.demo_scenario.name)}{tr(". Изменения изолированы и не сохраняются.")}</p>
               )}
-              {planContent(preview)}
-              {!preview.demo_scenario && (
+              {tr(planContent(preview))}
+              {tr(!preview.demo_scenario && (
                 <label className="row">
                   <input
                     type="checkbox"
@@ -2782,31 +2643,25 @@ function App() {
                     onChange={(e) =>
                       changePlan(preview, { force: e.target.checked })
                     }
-                  />
-                  Назначить принудительно с сохранением конфликтов
-                </label>
-              )}
-              {(preview.status === "CONFLICT" || preview.request.force) && (
+                  />{tr("Назначить принудительно с сохранением конфликтов")}</label>
+              ))}
+              {tr((preview.status === "CONFLICT" || preview.request.force) && (
                 <label className="field">
-                  <span>Обоснование ручного решения администратора</span>
+                  <span>{tr("Обоснование ручного решения администратора")}</span>
                   <textarea
                     value={override}
                     onChange={(e) => setOverride(e.target.value)}
-                    placeholder="Обязательная причина, не менее 12 символов"
+                    placeholder={tr("Обязательная причина, не менее 12 символов")}
                   />
                 </label>
-              )}
+              ))}
             </div>
             <div className="modal-footer">
-              {preview.demo_scenario ? (
-                <button onClick={() => setPreview(null)}>
-                  Закрыть проверку
-                </button>
+              {tr(preview.demo_scenario ? (
+                <button onClick={() => setPreview(null)}>{tr("Закрыть проверку")}</button>
               ) : (
                 <>
-                  <button onClick={() => startEdit(preview.request)}>
-                    Изменить
-                  </button>
+                  <button onClick={() => startEdit(preview.request)}>{tr("Изменить")}</button>
                   <button
                     disabled={busy}
                     onClick={() =>
@@ -2825,9 +2680,7 @@ function App() {
                           );
                       })
                     }
-                  >
-                    Найти замены
-                  </button>
+                  >{tr("Найти замены")}</button>
                   <button
                     disabled={busy}
                     onClick={() =>
@@ -2841,12 +2694,8 @@ function App() {
                         else setError("Подходящие комплекты не найдены");
                       })
                     }
-                  >
-                    Замены техники
-                  </button>
-                  <button disabled={busy} onClick={() => save(true)}>
-                    На согласование
-                  </button>
+                  >{tr("Замены техники")}</button>
+                  <button disabled={busy} onClick={() => save(true)}>{tr("На согласование")}</button>
                   <button
                     className="primary"
                     disabled={
@@ -2860,11 +2709,9 @@ function App() {
                         override.trim().length < 12)
                     }
                     onClick={() => save()}
-                  >
-                    Подтвердить
-                  </button>
+                  >{tr("Подтвердить")}</button>
                 </>
-              )}
+              ))}
             </div>
           </section>
         </div>
@@ -2874,18 +2721,17 @@ function App() {
           <section
             className="modal detail-modal"
             role="dialog"
-            aria-label="Карточка события"
+            aria-label={tr("Карточка события")}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="modal-head">
               <div>
                 <div className="eyebrow">
-                  {ru(detail.kind)} · {ru(detail.status)}
+                  {tr(ru(detail.kind))}{tr(" · ")}{tr(ru(detail.status))}
                 </div>
                 <h2>{detail.title}</h2>
                 <p>
-                  {date(detail.start)} · {time(detail.start)}–{time(detail.end)}{" "}
-                  · {detail.current.venue}
+                  {tr(date(detail.start))}{tr(" · ")}{tr(time(detail.start))}{tr("–")}{tr(time(detail.end))}{tr(" ")}{tr("· ")}{tr(detail.current.venue)}
                 </p>
               </div>
               <button className="icon" onClick={() => setDetail(null)}>
@@ -2893,10 +2739,10 @@ function App() {
               </button>
             </div>
             <div className="modal-body">
-              {detail.current.passport_changed && <p className="notice">Паспорт постановки изменён. Здесь показаны сохранённые назначения. Для применения нового паспорта нажмите «Изменить» и проверьте новый план.</p>}
-              {planContent(detail.current)}
+              {tr(detail.current.passport_changed && <p className="notice">{tr("Паспорт постановки изменён. Здесь показаны сохранённые назначения. Для применения нового паспорта нажмите «Изменить» и проверьте новый план.")}</p>)}
+              {tr(planContent(detail.current))}
               <details>
-                <summary>Факт работ</summary>
+                <summary>{tr("Факт работ")}</summary>
                 {detail.tasks.map((t: Obj) => (
                   <form
                     className="actual-row"
@@ -2924,22 +2770,22 @@ function App() {
                       name="end"
                       defaultValue={t.actual_end || t.end}
                     />
-                    <button>Сохранить</button>
+                    <button>{tr("Сохранить")}</button>
                   </form>
                 ))}
               </details>
               <details>
-                <summary>История изменений</summary>
-                {detail.history.map((h: Obj) => (
+                <summary>{tr("История изменений")}</summary>
+                {tr(detail.history.map((h: Obj) => (
                   <p key={h.id}>
-                    {date(h.created)} {time(h.created)} · {ru(h.action)}{" "}
-                    {ru(h.data.reason)}
+                    {tr(date(h.created))} {tr(time(h.created))}{tr(" · ")}{tr(ru(h.action))}{tr(" ")}
+                    {tr(ru(h.data.reason))}
                   </p>
-                ))}
+                )))}
               </details>
             </div>
             <div className="modal-footer">
-              {["Approved", "In Preparation", "Ready", "In Progress"].includes(
+              {tr(["Approved", "In Preparation", "Ready", "In Progress"].includes(
                 detail.status,
               ) && (
                 <button
@@ -2960,19 +2806,15 @@ function App() {
                       setRevision((x) => x + 1);
                     })
                   }
-                >
-                  Следующий этап
-                </button>
-              )}
+                >{tr("Следующий этап")}</button>
+              ))}
               <button
                 onClick={() => {
                   const req = detail.current.request;
                   setDetail(null);
                   analyze(req);
                 }}
-              >
-                Изменить
-              </button>
+              >{tr("Изменить")}</button>
               <button
                 onClick={() => {
                   setSlots([detail]);
@@ -2981,9 +2823,7 @@ function App() {
                   setView("production");
                   go("Календарь");
                 }}
-              >
-                Производство
-              </button>
+              >{tr("Производство")}</button>
               <button
                 onClick={() =>
                   run(async () => {
@@ -2996,24 +2836,23 @@ function App() {
                     setRevision((x) => x + 1);
                   })
                 }
-              >
-                Отменить событие
-              </button>
+              >{tr("Отменить событие")}</button>
             </div>
           </section>
         </div>
       )}
+      {tr(showExport && <ScheduleExport date={calDate} filters={filter} locale={language} onClose={()=>setShowExport(false)}/>)}
       {resourceEditor && (
         <div className="overlay" onClick={() => setResourceEditor(null)}>
           <section
             className="modal"
-            role="dialog" aria-modal="true" aria-label="Редактор ресурса"
+            role="dialog" aria-modal="true" aria-label={tr("Редактор ресурса")}
             style={{ maxWidth: 540 }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="modal-head">
               <h2>
-                {resourceEditor.id ? "Редактировать ресурс" : "Новый ресурс"}
+                {tr(resourceEditor.id ? "Редактировать ресурс" : "Новый ресурс")}
               </h2>
               <button className="icon" onClick={() => setResourceEditor(null)}>
                 <X />
@@ -3049,7 +2888,7 @@ function App() {
               }}
             >
               <label className="field">
-                <span>Название / ФИО</span>
+                <span>{tr("Название / ФИО")}</span>
                 <input
                   required
                   value={resourceEditor.name}
@@ -3061,7 +2900,7 @@ function App() {
                   }
                 />
               </label>
-              {!resourceEditor.id &&
+              {tr(!resourceEditor.id &&
                 picker(
                   "Тип ресурса",
                   "kind",
@@ -3076,9 +2915,9 @@ function App() {
                   ],
                   resourceEditor.kind,
                   (v) => setResourceEditor({ ...resourceEditor, kind: v }),
-                )}
+                ))}
               <label className="field">
-                <span>Подразделение</span>
+                <span>{tr("Подразделение")}</span>
                 <input
                   list="staff-departments"
                   required
@@ -3091,9 +2930,9 @@ function App() {
                   }
                 />
               </label>
-              <datalist id="staff-departments">{departments.map(d => <option key={d} value={d}/>)}</datalist>
+              <datalist id="staff-departments">{tr(departments.map(d => <option key={d} value={d}/>))}</datalist>
               <label className="field">
-                <span>Специализация / инструмент</span>
+                <span>{tr("Специализация / инструмент")}</span>
                 <input
                   value={resourceEditor.specialization || ""}
                   onChange={(e) =>
@@ -3104,12 +2943,12 @@ function App() {
                   }
                 />
               </label>
-              {resourceEditor.kind === "Room" && <label className="field"><span>Площадка помещения</span><select required value={resourceEditor.data?.venue_id || 0} onChange={e => setResourceEditor({...resourceEditor,data:{...resourceEditor.data,venue_id:+e.target.value}})}><option value="0">Выберите площадку</option>{resources.filter(r=>r.kind==="Venue").map(r=><option key={r.id} value={r.id}>{r.name}</option>)}</select></label>}
-              {["Room","Vehicle"].includes(resourceEditor.kind) && <label className="field"><span>Вместимость</span><input type="number" min={0} value={resourceEditor.data?.capacity ?? ""} onChange={e=>setResourceEditor({...resourceEditor,data:{...resourceEditor.data,capacity:e.target.value === "" ? "" : +e.target.value}})}/></label>}
-              {resourceEditor.kind === "Equipment Kit" && <label className="field"><span>Имущество комплекта</span><select multiple size={6} value={(resourceEditor.data?.items || []).map(String)} onChange={e=>setResourceEditor({...resourceEditor,data:{...resourceEditor.data,items:Array.from(e.target.selectedOptions).map(o=>+o.value)}})}>{resources.filter(r=>r.kind==="Equipment").map(r=><option key={r.id} value={r.id}>{r.name}</option>)}</select></label>}
-              {resourceEditor.kind === "Equipment" && (
+              {resourceEditor.kind === "Room" && <label className="field"><span>{tr("Площадка помещения")}</span><select required value={resourceEditor.data?.venue_id || 0} onChange={e => setResourceEditor({...resourceEditor,data:{...resourceEditor.data,venue_id:+e.target.value}})}><option value="0">{tr("Выберите площадку")}</option>{resources.filter(r=>r.kind==="Venue").map(r=><option key={r.id} value={r.id}>{r.name}</option>)}</select></label>}
+              {tr(["Room","Vehicle"].includes(resourceEditor.kind) && <label className="field"><span>{tr("Вместимость")}</span><input type="number" min={0} value={resourceEditor.data?.capacity ?? ""} onChange={e=>setResourceEditor({...resourceEditor,data:{...resourceEditor.data,capacity:e.target.value === "" ? "" : +e.target.value}})}/></label>)}
+              {resourceEditor.kind === "Equipment Kit" && <label className="field"><span>{tr("Имущество комплекта")}</span><select multiple size={6} value={(resourceEditor.data?.items || []).map(String)} onChange={e=>setResourceEditor({...resourceEditor,data:{...resourceEditor.data,items:Array.from(e.target.selectedOptions).map(o=>+o.value)}})}>{resources.filter(r=>r.kind==="Equipment").map(r=><option key={r.id} value={r.id}>{r.name}</option>)}</select></label>}
+              {tr(resourceEditor.kind === "Equipment" && (
                 <label className="field">
-                  <span>Категория оборудования</span>
+                  <span>{tr("Категория оборудования")}</span>
                   <input
                     list="equipment-categories"
                     value={resourceEditor.data?.category || ""}
@@ -3124,7 +2963,7 @@ function App() {
                     }
                   />
                   <datalist id="equipment-categories">
-                    {[
+                    {tr([
                       "Микрофоны",
                       "Консоли",
                       "Мониторы",
@@ -3138,13 +2977,11 @@ function App() {
                       "Медиасерверы",
                     ].map((c) => (
                       <option key={c} value={c} />
-                    ))}
+                    )))}
                   </datalist>
                 </label>
-              )}
-              <button className="primary" type="submit">
-                Сохранить ресурс
-              </button>
+              ))}
+              <button className="primary" type="submit">{tr("Сохранить ресурс")}</button>
             </form>
           </section>
         </div>
@@ -3156,11 +2993,11 @@ function App() {
               <Search />
               <input
                 autoFocus
-                placeholder="Команда, сотрудник, постановка…"
+                placeholder={tr("Команда, сотрудник, постановка…")}
                 value={find}
                 onChange={(e) => setFind(e.target.value)}
               />
-              <kbd>Esc</kbd>
+              <kbd>{tr("Esc")}</kbd>
             </div>
             <div className="palette-results">
               {[
@@ -3187,7 +3024,7 @@ function App() {
                     }}
                   >
                     <Command size={16} />
-                    {ru(r.name)}
+                    {r.name}
                     <ArrowRight size={14} />
                   </button>
                 ))}

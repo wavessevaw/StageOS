@@ -1,3 +1,4 @@
+import { tr } from "./i18n";
 import React, { useState } from "react";
 import InventoryEditor from "./InventoryEditor";
 import PeopleCastEditor from "./PeopleCastEditor";
@@ -168,16 +169,16 @@ export default function PassportEditor({
       opts = candidates(path);
     if (path.length === 1 && ["groups","crew"].includes(key)) {
       const casts=draft.data[key+"_casts"];
-      return <section key={key}><h3>{title}</h3>
-        {Object.keys(value).map(dept=><PeopleCastEditor key={dept} department={dept} resources={resources} casts={casts[dept] || {A:[],B:[]}} onChange={people=>change([key+"_casts"],{...casts,[dept]:people})}/>)}
-        <label className="field"><span>Добавить подразделение</span><select value="" onChange={e=>{if(e.target.value){change([key],{...value,[e.target.value]:[]});change([key+"_casts"],{...casts,[e.target.value]:{A:[],B:[]}});}}}>
-          <option value="">Выберите цех</option>{[...new Set(resources.filter(r=>r.kind==="Person").map(r=>r.department))].filter(d=>!(d in value)).map(d=><option key={d} value={d}>{d}</option>)}
+      return <section key={key}><h3>{tr(title)}</h3>
+        {tr(Object.keys(value).map(dept=><PeopleCastEditor key={dept} department={dept} resources={resources} casts={casts[dept] || {A:[],B:[]}} onChange={people=>change([key+"_casts"],{...casts,[dept]:people})}/>))}
+        <label className="field"><span>{tr("Добавить подразделение")}</span><select value="" onChange={e=>{if(e.target.value){change([key],{...value,[e.target.value]:[]});change([key+"_casts"],{...casts,[e.target.value]:{A:[],B:[]}});}}}>
+          <option value="">{tr("Выберите цех")}</option>{tr([...new Set(resources.filter(r=>r.kind==="Person").map(r=>r.department))].filter(d=>!(d in value)).map(d=><option key={d} value={d}>{tr(d)}</option>))}
         </select></label></section>;
     }
     if (path[0] === "scenes" && key === "roles" && Array.isArray(value))
       return (
         <label className="field" key={path.join(".")}>
-          <span>Роли сцены</span>
+          <span>{tr("Роли сцены")}</span>
           <select
             multiple
             size={5}
@@ -189,19 +190,19 @@ export default function PassportEditor({
               )
             }
           >
-            {draft.data.roles.map((r: O, i: number) => (
+            {tr(draft.data.roles.map((r: O, i: number) => (
               <option key={i} value={i}>
-                {r.role}
+                {tr(r.role)}
               </option>
-            ))}
+            )))}
           </select>
-          <small>Ctrl + щелчок — несколько ролей</small>
+          <small>{tr("Ctrl + щелчок — несколько ролей")}</small>
         </label>
       );
     if (opts && (typeof value === "number" || Array.isArray(value)))
       return (
         <label className="field" key={path.join(".")}>
-          <span>{title}</span>
+          <span>{tr(title)}</span>
           <select
             aria-label={title}
             multiple={Array.isArray(value)}
@@ -216,38 +217,36 @@ export default function PassportEditor({
               )
             }
           >
-            {!Array.isArray(value) && (
-              <option value="0">{key === "vehicle" ? "Без транспорта" : "Не назначен"}</option>
-            )}
+            {tr(!Array.isArray(value) && (
+              <option value="0">{tr(key === "vehicle" ? "Без транспорта" : "Не назначен")}</option>
+            ))}
             {opts.map((r) => (
               <option key={r.id} value={r.id}>
-                {ru(r.name)} · {ru(r.department)}
+                {ru(r.name)}{tr(" · ")}{tr(ru(r.department))}
               </option>
             ))}
           </select>
-          {Array.isArray(value) && (
-            <small>Ctrl + щелчок — выбрать несколько или снять выбор</small>
-          )}
+          {tr(Array.isArray(value) && (
+            <small>{tr("Ctrl + щелчок — выбрать несколько или снять выбор")}</small>
+          ))}
         </label>
       );
     if (Array.isArray(value))
       return (
         <section key={path.join(".")} className="panel">
-          <h3>{title}</h3>
-          {value.map((v, i) => (
+          <h3>{tr(title)}</h3>
+          {tr(value.map((v, i) => (
             <div className="panel" key={i}>
-              {field(v, [...path, i])}
+              {tr(field(v, [...path, i]))}
               <button
                 type="button"
                 onClick={() => {
                   change(path, value.filter((_, j) => j !== i));
                   if (path.length === 1 && key === "roles") change(["scenes"], draft.data.scenes.map((scene: O)=>({...scene,roles:scene.roles.filter((r: number)=>r!==i).map((r: number)=>r>i?r-1:r)})));
                 }}
-              >
-                Удалить пункт
-              </button>
+              >{tr("Удалить пункт")}</button>
             </div>
-          ))}
+          )))}
           <button
             type="button"
             onClick={() =>
@@ -260,20 +259,18 @@ export default function PassportEditor({
                     : 0,
               ])
             }
-          >
-            Добавить пункт
-          </button>
+          >{tr("Добавить пункт")}</button>
         </section>
       );
     if (value && typeof value === "object")
       return (
         <div className="passport-fields" key={path.join(".")}>
-          <h3>{title}</h3>
-          {Object.entries(value).map(([k, v]) => field(v, [...path, k]))}
-          {["groups","crew"].includes(key) && <label className="field"><span>Добавить подразделение</span><select value="" onChange={e=>{if(e.target.value)change(path,{...value,[e.target.value]:[]})}}><option value="">Выберите цех</option>{[...new Set(resources.filter(r=>r.kind==="Person").map(r=>r.department))].filter(d=>!(d in value)).map(d=><option key={d} value={d}>{d}</option>)}</select></label>}
+          <h3>{tr(title)}</h3>
+          {tr(Object.entries(value).map(([k, v]) => field(v, [...path, k])))}
+          {tr(["groups","crew"].includes(key) && <label className="field"><span>{tr("Добавить подразделение")}</span><select value="" onChange={e=>{if(e.target.value)change(path,{...value,[e.target.value]:[]})}}><option value="">{tr("Выберите цех")}</option>{tr([...new Set(resources.filter(r=>r.kind==="Person").map(r=>r.department))].filter(d=>!(d in value)).map(d=><option key={d} value={d}>{tr(d)}</option>))}</select></label>)}
           {key === "overrides" && (
             <label className="field">
-              <span>Добавить адаптацию площадки</span>
+              <span>{tr("Добавить адаптацию площадки")}</span>
               <select
                 value=""
                 onChange={(e) => {
@@ -290,7 +287,7 @@ export default function PassportEditor({
                     });
                 }}
               >
-                <option value="">Выберите площадку</option>
+                <option value="">{tr("Выберите площадку")}</option>
                 {resources
                   .filter((r) => r.kind === "Venue")
                   .map((r) => (
@@ -301,7 +298,7 @@ export default function PassportEditor({
               </select>
             </label>
           )}
-          {path[0] === "overrides" && path.length === 2 && (
+          {tr(path[0] === "overrides" && path.length === 2 && (
             <button
               type="button"
               onClick={() => {
@@ -309,16 +306,14 @@ export default function PassportEditor({
                 delete d[key];
                 change(["overrides"], d);
               }}
-            >
-              Удалить адаптацию
-            </button>
-          )}
+            >{tr("Удалить адаптацию")}</button>
+          ))}
         </div>
       );
-    if (key.endsWith("_notes")) return <label className="field" key={key}><span>{title}</span><textarea value={value || ""} onChange={e=>change(path,e.target.value)} /></label>;
+    if (key.endsWith("_notes")) return <label className="field" key={key}><span>{tr(title)}</span><textarea value={value || ""} onChange={e=>change(path,e.target.value)} /></label>;
     return (
       <label className="field" key={path.join(".")}>
-        <span>{title}</span>
+        <span>{tr(title)}</span>
         <input
           type={
             typeof value === "boolean"
@@ -345,42 +340,42 @@ export default function PassportEditor({
   }
   return (
     <section className="panel">
-      <h1>{draft.id ? "Редактировать постановку" : "Добавить спектакль"}</h1>
+      <h1>{tr(draft.id ? "Редактировать постановку" : "Добавить спектакль")}</h1>
       <label className="field">
-        <span>Название постановки</span>
+        <span>{tr("Название постановки")}</span>
         <input
           value={draft.name}
           onChange={(e) => setDraft({ ...draft, name: e.target.value })}
         />
       </label>
       <div className="toolbar">
-        {Object.keys(sections).map((s) => (
+        {tr(Object.keys(sections).map((s) => (
           <button
             className={section === s ? "primary" : ""}
             key={s}
             onClick={() => setSection(s)}
           >
-            {s}
+            {tr(s)}
           </button>
-        ))}
+        )))}
       </div>
-      {section === "Техника" && (
+      {tr(section === "Техника" && (
         <InventoryEditor
           resources={resources}
           ids={draft.data.items || []}
           onChange={(ids) => change(["items"], ids)}
           onCreate={onCreate}
         />
-      )}
-      {section === "Основное" && <p className="muted">Подготовка рассчитывается по этапам в разделе «Производство»; время переезда зависит от площадки. Постановку можно сохранить с неполным наполнением и дополнять по мере подготовки. Комплекты, помещения и транспорт можно добавить через каталог ресурсов.</p>}
-      {sections[section].map((k: string) => field(draft.data[k], [k]))}
-      {error && (
+      ))}
+      {tr(section === "Основное" && <p className="muted">{tr("Подготовка рассчитывается по этапам в разделе «Производство»; время переезда зависит от площадки. Постановку можно сохранить с неполным наполнением и дополнять по мере подготовки. Комплекты, помещения и транспорт можно добавить через каталог ресурсов.")}</p>)}
+      {tr(sections[section].map((k: string) => field(draft.data[k], [k])))}
+      {tr(error && (
         <p role="alert" className="notice">
-          {error}
+          {tr(error)}
         </p>
-      )}
+      ))}
       <div className="toolbar">
-        <button onClick={onCancel}>Отмена</button>
+        <button onClick={onCancel}>{tr("Отмена")}</button>
         <button
           className="primary"
           disabled={saving}
@@ -394,14 +389,9 @@ export default function PassportEditor({
               setSaving(false);
             }
           }}
-        >
-          Сохранить постановку
-        </button>
+        >{tr("Сохранить постановку")}</button>
       </div>
-      <p className="muted">
-        Изменения паспорта применяются при следующем расчёте. Уже сохранённые
-        события требуют отдельного изменения и подтверждения.
-      </p>
+      <p className="muted">{tr("Изменения паспорта применяются при следующем расчёте. Уже сохранённые события требуют отдельного изменения и подтверждения.")}</p>
     </section>
   );
 }

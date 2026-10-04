@@ -22,15 +22,15 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: python -m pip install -r requirements-lock.txt ruff
-      - run: python -m ruff check backend tests windows/windows_desktop.py --select E9,F63,F7,F82
-      - run: python -m pytest tests -q
+      - run: python -m ruff check backend tests windows/windows_desktop.py --select E9,F63,F7,F82 | tee release-static-results.txt
+      - run: python -m pytest tests -q | tee release-test-results.txt
       - run: npm ci --prefix frontend
-      - run: npm run build --prefix frontend
+      - run: npm run build --prefix frontend | tee release-build-results.txt
       - run: npx playwright install --with-deps chromium
         working-directory: frontend
-      - run: npx playwright test
+      - run: npx playwright test | tee ../release-ui-results.txt
         working-directory: frontend
-      - run: npx playwright test --config playwright.release.config.ts
+      - run: npx playwright test --config playwright.release.config.ts | tee ../release-empty-ui-results.txt
         working-directory: frontend
       - uses: actions/upload-artifact@v4
         if: always()
@@ -40,6 +40,13 @@ jobs:
             ui-results.json
             release-ui-results.json
             frontend/test-results
+      - uses: actions/upload-artifact@v4
+        with:
+          name: StageOS-Test-Results
+          path: |
+            release-*-results.txt
+            ui-results.json
+            release-ui-results.json
   windows-portable:
     runs-on: windows-2022
     timeout-minutes: 30

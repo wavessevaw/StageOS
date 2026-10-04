@@ -4,6 +4,7 @@ test('Incomplete passport saves and service casts add people one at a time',asyn
   await page.goto('/');
   await page.getByRole('button',{name:'Добавить спектакль',exact:true}).first().click();
   await page.getByLabel('Название постановки',{exact:true}).fill('Неполная новая постановка');
+  await page.getByLabel('Основная площадка',{exact:true}).selectOption('0');
   await page.getByRole('button',{name:'Сохранить постановку',exact:true}).click();
   await expect(page.getByRole('heading',{name:'Неполная новая постановка',exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Редактировать постановку',exact:true}).click();

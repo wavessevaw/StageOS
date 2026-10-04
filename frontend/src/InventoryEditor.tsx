@@ -1,3 +1,4 @@
+import { tr } from "./i18n";
 import React, { useState } from "react";
 import { ru } from "./ru";
 export default function InventoryEditor({
@@ -33,9 +34,9 @@ export default function InventoryEditor({
   }
   return (
     <section className="panel">
-      <h2>Поштучное имущество постановки</h2>
+      <h2>{tr("Поштучное имущество постановки")}</h2>
       <div className="toolbar">
-        {["Свет", "Звук", "Видео", "Сцена", "Реквизит", "Костюм"].map((d) => (
+        {tr(["Свет", "Звук", "Видео", "Сцена", "Реквизит", "Костюм"].map((d) => (
           <button
             key={d}
             className={dept === d ? "primary" : ""}
@@ -53,29 +54,29 @@ export default function InventoryEditor({
               );
             }}
           >
-            {d}
+            {tr(d)}
           </button>
-        ))}
+        )))}
       </div>
       <label className="field">
-        <span>Тип имущества</span>
+        <span>{tr("Тип имущества")}</span>
         <select value={kind} onChange={(e) => setKind(e.target.value)}>
-          {["Equipment", "Scenery", "Prop", "Costume"].map((k) => (
+          {tr(["Equipment", "Scenery", "Prop", "Costume"].map((k) => (
             <option value={k} key={k}>
-              {ru(k)}
+              {tr(ru(k))}
             </option>
-          ))}
+          )))}
         </select>
       </label>
       <label className="field">
-        <span>Категория</span>
+        <span>{tr("Категория")}</span>
         <input
           list="unit-categories"
           value={category}
           onChange={(e) => setCategory(e.target.value)}
         />
         <datalist id="unit-categories">
-          {[
+          {tr([
             "Микрофоны",
             "Консоли",
             "Мониторы",
@@ -90,11 +91,11 @@ export default function InventoryEditor({
             "Задники",
           ].map((c) => (
             <option value={c} key={c} />
-          ))}
+          )))}
         </datalist>
       </label>
       <details>
-        <summary>Выбрать существующие единицы · {rows.length}</summary>
+        <summary>{tr("Выбрать существующие единицы · ")}{tr(rows.length)}</summary>
         {rows.map((r) => (
           <label className="personline" key={r.id}>
             <input
@@ -112,18 +113,18 @@ export default function InventoryEditor({
           </label>
         ))}
       </details>
-      <h3>Создать позицию и включить в постановку</h3>
+      <h3>{tr("Создать позицию и включить в постановку")}</h3>
       <div className="row">
         <label className="field">
-          <span>Название позиции</span>
+          <span>{tr("Название позиции")}</span>
           <input
             value={name}
-            placeholder="Например: BSW 350 или Стулья для Последнего рейса"
+            placeholder={tr("Например: BSW 350 или Стулья для Последнего рейса")}
             onChange={(e) => setName(e.target.value)}
           />
         </label>
         <label className="field">
-          <span>Количество, шт.</span>
+          <span>{tr("Количество, шт.")}</span>
           <input
             type="number"
             min={1}
@@ -133,13 +134,13 @@ export default function InventoryEditor({
           />
         </label>
       </div>
-      {kind === "Scenery" && (
+      {tr(kind === "Scenery" && (
         <div className="row">
-          {Object.entries(size).map(([k, v]) => (
+          {tr(Object.entries(size).map(([k, v]) => (
             <label className="field" key={k}>
               <span>
-                {ru(k)}
-                {k === "mass" ? ", кг" : ", м"}
+                {tr(ru(k))}
+                {tr(k === "mass" ? ", кг" : ", м")}
               </span>
               <input
                 type="number"
@@ -149,10 +150,10 @@ export default function InventoryEditor({
                 onChange={(e) => setSize({ ...size, [k]: +e.target.value })}
               />
             </label>
-          ))}
+          )))}
         </div>
-      )}
-      {kind === "Scenery" && <div className="row">{[["setup","Время установки, мин"],["crew","Монтажники, чел."],["transport_width","Транспортная ширина, м"],["transport_height","Транспортная высота, м"]].map(([k,label])=><label className="field" key={k}><span>{label}</span><input type="number" min={0} step={k.startsWith("transport_")?0.1:1} value={(sceneryOptions as any)[k]} onChange={e=>setSceneryOptions({...sceneryOptions,[k]:+e.target.value})}/></label>)}<label><input type="checkbox" checked={sceneryOptions.fly} onChange={e=>setSceneryOptions({...sceneryOptions,fly:e.target.checked})}/>Декорация требует верхнего подвеса</label></div>}
+      ))}
+      {tr(kind === "Scenery" && <div className="row">{tr([["setup","Время установки, мин"],["crew","Монтажники, чел."],["transport_width","Транспортная ширина, м"],["transport_height","Транспортная высота, м"]].map(([k,label])=><label className="field" key={k}><span>{tr(label)}</span><input type="number" min={0} step={k.startsWith("transport_")?0.1:1} value={(sceneryOptions as any)[k]} onChange={e=>setSceneryOptions({...sceneryOptions,[k]:+e.target.value})}/></label>))}<label><input type="checkbox" checked={sceneryOptions.fly} onChange={e=>setSceneryOptions({...sceneryOptions,fly:e.target.checked})}/>{tr("Декорация требует верхнего подвеса")}</label></div>)}
       <button
         disabled={busy || !name.trim()}
         onClick={async () => {
@@ -174,30 +175,21 @@ export default function InventoryEditor({
             setBusy(false);
           }
         }}
-      >
-        Создать и добавить
-      </button>
-      {error && <p role="alert">{error}</p>}
-      <h3>Включено в постановку</h3>
-      {Object.entries(groups).map(([n, items]) => (
+      >{tr("Создать и добавить")}</button>
+      {tr(error && <p role="alert">{tr(error)}</p>)}
+      <h3>{tr("Включено в постановку")}</h3>
+      {tr(Object.entries(groups).map(([n, items]) => (
         <div className="personline" key={n}>
           <b>
-            {ru(n)} — {items.length} шт.
-          </b>
+            {tr(ru(n))}{tr(" — ")}{tr(items.length)}{tr(" шт.")}</b>
           <button
             onClick={() =>
               onChange(ids.filter((id) => !items.some((r) => r.id === id)))
             }
-          >
-            Убрать из постановки
-          </button>
+          >{tr("Убрать из постановки")}</button>
         </div>
-      ))}
-      <p className="muted">
-        Каждая штука — отдельная единица в базе. Пересечения проверяются по
-        конкретным единицам. Созданное имущество остаётся в каталоге, даже если
-        отменить редактирование постановки.
-      </p>
+      )))}
+      <p className="muted">{tr("Каждая штука — отдельная единица в базе. Пересечения проверяются по конкретным единицам. Созданное имущество остаётся в каталоге, даже если отменить редактирование постановки.")}</p>
     </section>
   );
 }

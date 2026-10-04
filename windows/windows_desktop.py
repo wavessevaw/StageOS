@@ -33,7 +33,12 @@ def self_test():
                 p=Production(name='Проверка постановки',data=validate_production(s,data));s.add(p);s.flush()
                 r=Request(production_id=p.id,venue_id=venue.id,start=datetime(2026,12,1,18))
                 plan=preview(s,r);assert plan['status']=='READY';ev=save_plan(s,r,plan)
-                return {'status':'PASS','python':sys.version,'platform':sys.platform,'solver':plan['solver']['status'],'empty_database':'PASS','event_saved':ev.id,'desktop_gui':'NOT_TESTED'}
+                from backend.schedule_export import build_pages,export
+                from datetime import date
+                pages=build_pages([],[],[],date(2026,12,1),date(2026,12,1))
+                assert export(pages,'pdf')[0].startswith(b'%PDF-')
+                assert export(pages,'png')[0].startswith(b'\x89PNG')
+                return {'status':'PASS','python':sys.version,'platform':sys.platform,'solver':plan['solver']['status'],'empty_database':'PASS','event_saved':ev.id,'desktop_gui':'NOT_TESTED','pdf_export':'PASS','png_export':'PASS'}
         finally:
             engine.dispose()
 

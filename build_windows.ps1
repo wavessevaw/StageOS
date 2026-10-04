@@ -24,7 +24,7 @@ if ($Mode -eq 'Portable') {
     exit 0
 }
 
-Run-Native $py @('-m','PyInstaller','--noconfirm','--clean','--onefile','--name','stageos-backend','--collect-all','ortools','--collect-all','uvicorn','--collect-all','alembic','--hidden-import','sqlalchemy.dialects.sqlite','--add-data','frontend/dist;frontend/dist','--add-data','migrations;migrations','--paths','.','backend/launcher.py')
+Run-Native $py @('-m','PyInstaller','--noconfirm','--clean','--onefile','--name','stageos-backend','--collect-all','ortools','--collect-all','uvicorn','--collect-all','alembic','--hidden-import','sqlalchemy.dialects.sqlite','--add-data','backend/assets;backend/assets','--collect-all','reportlab','--collect-all','PIL','--add-data','frontend/dist;frontend/dist','--add-data','migrations;migrations','--paths','.','backend/launcher.py')
 New-Item -ItemType Directory -Force -Path 'src-tauri\binaries' | Out-Null
 Copy-Item 'dist\stageos-backend.exe' 'src-tauri\binaries\stageos-backend-x86_64-pc-windows-msvc.exe' -Force
 Run-Native 'npm.cmd' @('ci')
