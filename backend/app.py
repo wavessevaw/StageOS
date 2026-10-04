@@ -165,7 +165,7 @@ def create_app(engine=None, static_dir=None, demo_enabled=None):
                     for resource in check.scalars(select(Resource)):
                         validate_resource(check,resource.kind,resource.department,resource.data)
                     for production in check.scalars(select(Production)):
-                        validate_production(check,production.data)
+                        validate_production(check,production.data,check_qualifications=False,allow_retired=True)
                     for booking in check.scalars(select(Booking)):
                         if booking.end<=booking.start:raise ValueError('Неверный интервал бронирования')
                     validate_saved_data(check)
@@ -669,6 +669,7 @@ def create_app(engine=None, static_dir=None, demo_enabled=None):
             if (s.scalar(select(Booking.id).where(Booking.resource_id==rid).limit(1))
                 or s.scalar(select(Event.id).where(Event.venue_id==rid).limit(1))
                 or any(rid in referenced_ids(p.data) for p in s.scalars(select(Production)))
+                or any(rid in referenced_ids(e.data['plan'].get('production_snapshot',{})) for e in s.scalars(select(Event)))
                 or any(x.data.get('venue_id')==rid or rid in x.data.get('items',[]) for x in s.scalars(select(Resource).where(Resource.id!=rid)))):
                 raise HTTPException(409,'Ресурс используется в производстве. Переведите его в недоступное состояние')
             s.add(Audit(action="Ресурс удалён", data={"before": serial(r)}))

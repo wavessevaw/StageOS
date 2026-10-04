@@ -61,6 +61,7 @@ def validate_saved_data(session):
     from sqlalchemy import select
     from .models import Resource, Event, Task, Booking
     from .engine import Request
+    from .production_editor import validate_production
     resources={r.id:r for r in session.scalars(select(Resource))}
     states={'Draft','Planning','Pending Approval','Approved','In Preparation','Ready','In Progress','Completed','Cancelled'}
     def span(a,b,empty=False):
@@ -78,6 +79,8 @@ def validate_saved_data(session):
         if not isinstance(plan,dict) or not {'request','assignments','tasks','bookings','conflicts','compatibility','title','start','end','status'}<=plan.keys():
             raise ValueError('Сохранённый план неполон')
         if plan['start']!=event.start.isoformat() or plan['end']!=event.end.isoformat():raise ValueError('Время сохранённого плана повреждено')
+        if plan.get('production_snapshot') is not None:
+            validate_production(session,plan['production_snapshot'],check_qualifications=False,allow_retired=True)
         for assignment in plan['assignments']:
             for key in ['actual_id','responsible_id']:
                 if assignment[key] not in resources or resources[assignment[key]].kind!='Person':raise ValueError('В плане отсутствует сотрудник')

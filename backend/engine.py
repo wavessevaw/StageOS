@@ -490,11 +490,7 @@ def preview(s, r: Request, production_data=None):
         person = resources.get(actual)
         if not person or person.kind != "Person":
             raise ValueError("Замена должна быть сотрудником")
-        allowed = (
-            actual in eligible
-            if eligible
-            else dept in person.data.get("qualification", [])
-        )
+        allowed = dept in person.data.get("qualification", []) and (eligible is None or actual in eligible)
         if not allowed:
             conflicts.append(
                 issue(

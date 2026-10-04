@@ -67,7 +67,7 @@ def validate_resource(s, kind, department, data):
     for key in ['width','depth','height','mass','setup','crew','capacity','current_load','travel','power','dmx','transport_width','transport_height']:
         if key in d:number(d[key],'Параметр ресурса '+key,integer=key in ['crew','dmx','travel'])
     if kind in ['Room','Fly Bar','Soffit','Lighting Position']:
-        parent=s.get(Resource,d.get('venue_id')) if isinstance(d.get('venue_id'),int) else None
+        parent=s.get(Resource,d.get('venue_id')) if isinstance(d.get('venue_id'),int) and not isinstance(d.get('venue_id'),bool) else None
         if not parent or parent.kind!='Venue':raise ValueError('Укажите площадку ресурса')
     if kind=='Room':
         number(d.get('capacity',0),'Вместимость помещения',0,100000,True)

@@ -37,14 +37,14 @@ def requirements(source):
     if d['moving_fly_bars']>d['fly_bars']:raise ValueError('Подвижных штанкетов не может быть больше общего количества')
     return d
 
-def validate_production(s, source):
+def validate_production(s, source, *, check_qualifications=True, allow_retired=False):
     if not isinstance(source,dict):raise ValueError('Паспорт постановки должен быть объектом')
     required=['duration','home_venue','responsibles','roles','groups','crew','equipment_kits','scenery','props','vehicle','requirements','scenes','pipeline','overrides']
     if any(k not in source for k in required):raise ValueError('Паспорт постановки неполон')
     d=deepcopy(source)
     def ref(rid,kinds):
         r=s.get(Resource,rid) if isinstance(rid,int) and not isinstance(rid,bool) and rid>0 else None
-        if not r or r.kind not in kinds or r.data.get('retired'):raise ValueError(f'Неверный или выведенный из эксплуатации ресурс: {rid}')
+        if not r or r.kind not in kinds or (r.data.get('retired') and not allow_retired):raise ValueError(f'Неверный или выведенный из эксплуатации ресурс: {rid}')
         return r
     def ids(value,kinds):
         if not isinstance(value,list):raise ValueError('Состав должен быть списком ресурсов')
@@ -60,24 +60,24 @@ def validate_production(s, source):
     for dept,rid in d['responsibles'].items():
         if rid:
             person=ref(rid,['Person'])
-            if dept not in person.data.get('qualification',[]):raise ValueError('Сотрудник не имеет квалификации: '+dept)
+            if check_qualifications and dept not in person.data.get('qualification',[]):raise ValueError('Сотрудник не имеет квалификации: '+dept)
     d['responsibles']={k:v for k,v in d['responsibles'].items() if v}
     for group in ['groups','crew','orchestra_versions']:
         for dept,people in d.get(group,{}).items():
             ids(people,['Person'])
             qualification='Оркестр' if group=='orchestra_versions' else dept
             for rid in people:
-                if qualification not in ref(rid,['Person']).data.get('qualification',[]):raise ValueError('Сотрудник не имеет квалификации: '+qualification)
+                if check_qualifications and qualification not in ref(rid,['Person']).data.get('qualification',[]):raise ValueError('Сотрудник не имеет квалификации: '+qualification)
     if not isinstance(d['roles'],list) or not isinstance(d['scenes'],list):raise ValueError('Роли и сцены должны быть списками')
     for role in d['roles']:
         if not isinstance(role,dict) or not str(role.get('role','')).strip():raise ValueError('Укажите название роли')
         for key in ['A','B']:
             person=ref(role.get(key),['Person'])
-            if 'Артисты' not in person.data.get('qualification',[]):raise ValueError('Исполнитель роли должен иметь квалификацию артиста')
+            if check_qualifications and 'Артисты' not in person.data.get('qualification',[]):raise ValueError('Исполнитель роли должен иметь квалификацию артиста')
         ids(role.get('eligible'),['Person'])
         if role['A'] not in role['eligible'] or role['B'] not in role['eligible']:raise ValueError('Оба состава роли должны входить в допущенных исполнителей')
         for rid in role['eligible']:
-            if 'Артисты' not in ref(rid,['Person']).data.get('qualification',[]):raise ValueError('Резерв роли должен иметь квалификацию артиста')
+            if check_qualifications and 'Артисты' not in ref(rid,['Person']).data.get('qualification',[]):raise ValueError('Резерв роли должен иметь квалификацию артиста')
     for key,kinds in [('equipment_kits',['Equipment Kit']),('scenery',['Scenery']),('props',['Prop','Costume']),('items',['Equipment','Scenery','Prop','Costume'])]:ids(d.get(key,[]),kinds)
     for scene in d['scenes']:
         if not isinstance(scene,dict) or not str(scene.get('name','')).strip() or not isinstance(scene.get('roles'),list):raise ValueError('Укажите название и роли сцены')
@@ -92,7 +92,7 @@ def validate_production(s, source):
         ov['requirements']=requirements(ov.get('requirements',{}))
         ids(ov.get('orchestra',[]),['Person']);ids(ov.get('scenery',[]),['Scenery'])
         for rid in ov.get('orchestra',[]):
-            if 'Оркестр' not in ref(rid,['Person']).data.get('qualification',[]):raise ValueError('Адаптация требует музыканта оркестра')
+            if check_qualifications and 'Оркестр' not in ref(rid,['Person']).data.get('qualification',[]):raise ValueError('Адаптация требует музыканта оркестра')
     return d
 
 def referenced_ids(data):

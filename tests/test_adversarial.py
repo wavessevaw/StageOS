@@ -92,3 +92,23 @@ def test_malformed_ai_settings_are_422_and_do_not_change_core(clean,body):
     c,S=clean;v,person,p,r=setup_clean(c)
     assert c.put('/api/settings/llm',json=body).status_code==422
     assert c.post('/api/preview',json=r).json()['status']=='READY'
+
+
+def test_backup_preserves_live_conflicts_after_qualification_change(clean):
+    c,S=clean;v,person,p,r=setup_clean(c);ev=confirm(c,r).json()
+    assert c.patch('/api/resources/'+str(person['id']),json={'data':{'qualification':['Балет']}}).status_code==200
+    assert 'qualification' in {x['code'] for x in c.post('/api/preview',json=r).json()['conflicts']}
+    backup=c.get('/api/database/export').content
+    restored=c.post('/api/database/import',content=backup)
+    assert restored.status_code==200,restored.text
+    assert c.get('/api/events/'+str(ev['id'])).json()['current']['status']=='CONFLICT'
+
+def test_snapshot_references_cannot_be_deleted_when_passport_changes(clean):
+    c,S=clean;v,person,p,r=setup_clean(c)
+    item=c.post('/api/inventory/units',json={'kind':'Prop','name':'Исторический реквизит','quantity':1,'department':'Реквизит','data':{}}).json()[0]
+    p['data']['items']=[item['id']]
+    p=c.patch('/api/productions/'+str(p['id']),json=p).json();ev=confirm(c,r).json()
+    p['data']['items']=[]
+    assert c.patch('/api/productions/'+str(p['id']),json=p).status_code==200
+    assert c.post('/api/events/'+str(ev['id'])+'/status',json={'status':'Cancelled','version':ev['version']}).status_code==200
+    assert c.delete('/api/resources/'+str(item['id'])).status_code==409
