@@ -91,7 +91,7 @@ shutil.copyfile(ROOT / "windows/StageOS.ico", OUT / "StageOS.ico")
     json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
 )
 (OUT / "START_HERE_RU.txt").write_text(
-    "StageOS 1.0.1\n\n1. Распакуйте всю папку в любое место.\n2. Запустите StageOS.exe двойным щелчком.\n3. Нажмите «Создать рабочую базу».\n\nPython, сервер базы и терминал запускать не нужно.\nДля окна требуется Microsoft Edge WebView2 Runtime (обычно уже установлен в Windows 11).\nДанные: %LOCALAPPDATA%\\StageOS-Work. Ошибки старта: startup-error.log в том же каталоге.\n\nWindows runtime включён. Сборка и запуск окна проверяются на Windows Server 2022 в GitHub Actions. Ручная проверка на Windows 10/11 не выполнена. Перед распаковкой скачанного ZIP снимите блокировку в его свойствах, если она есть.\n",
+    "StageOS 1.0.2\n\n1. Распакуйте всю папку в любое место.\n2. Запустите StageOS.exe двойным щелчком.\n3. Нажмите «Создать рабочую базу».\n\nPython, сервер базы и терминал запускать не нужно.\nДля окна требуется Microsoft Edge WebView2 Runtime (обычно уже установлен в Windows 11).\nДанные: %LOCALAPPDATA%\\StageOS-Work. Ошибки старта: startup-error.log в том же каталоге.\n\nWindows runtime включён. Сборка и запуск окна проверяются на Windows Server 2022 в GitHub Actions. Ручная проверка на Windows 10/11 не выполнена. Перед распаковкой скачанного ZIP снимите блокировку в его свойствах, если она есть.\n",
     encoding="utf-8",
 )
 print(OUT)

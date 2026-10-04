@@ -84,7 +84,7 @@ Switch **Russian / English** in the header. Your preference is stored in the dat
 
 ## Release status
 
-**Version 1.0.1** adds incomplete passports, independent department casts, a new native icon, persisted language selection, and offline PDF/PNG schedule export. The working package starts with an empty database. Publication is gated by [backend, browser UI and Windows checks](https://github.com/wavessevaw/StageOS/actions/workflows/release.yml); exact results and limitations are included in the release archive. Back up your database before updating.
+**Version 1.0.2** adds incomplete passports, independent department casts, a new native icon, persisted language selection, and offline PDF/PNG schedule export. The working package starts with an empty database. Publication is gated by [backend, browser UI and Windows checks](https://github.com/wavessevaw/StageOS/actions/workflows/release.yml); exact results and limitations are included in the release archive. Back up your database before updating.
 
 <details>
 <summary>Verification and current limits</summary>
@@ -113,3 +113,5 @@ React and TypeScript power the interface. FastAPI, SQLAlchemy, Alembic and SQLit
 Open Calendar → **Export schedule**. Choose up to 31 days, current filters, staff calls, production stages and notes. The matrix groups dates, venues and rooms. PDF is ready for printing; PNG is convenient for sharing. Multiple PNG pages download as a ZIP.
 
 Database backup/export is separate: Settings → Download backup. Restore with Open existing database. A failed import leaves the active database unchanged; a successful import creates a managed copy and persists the selection for future launches.
+
+Version 1.0.2 fixes imported source information and production credits, displays eligible performers without assigning casts, and clearly marks unspecified preparation time.

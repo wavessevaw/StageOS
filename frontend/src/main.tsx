@@ -33,6 +33,7 @@ import "./style.css";
 import PassportEditor from "./PassportEditor";
 import VenueEditor from "./VenueEditor";
 import ScheduleExport from "./ScheduleExport";
+import {DataValue,ImportedData,isImportedMetadata,importedLabel} from "./ImportedData";
 import { ru } from "./ru";
 type Obj = Record<string, any>;
 const initialToken = new URLSearchParams(location.search).get("token");
@@ -873,7 +874,7 @@ function App() {
           )))}
         </nav>
         <div className="sidebar-bottom">
-          <span className="online" />{tr("Локальная база данных")}<small>{tr("StageOS · 1.0.1")}</small>
+          <span className="online" />{tr("Локальная база данных")}<small>{tr("StageOS · 1.0.2")}</small>
         </div>
       </aside>
       <main>
@@ -1708,11 +1709,11 @@ function App() {
                           <h3>{ru(p.name)}</h3>
                           <p>
                             {tr(p.data.duration)}{tr(" мин")}{tr(" ")}
-                            <span>{tr("Подготовка ")}{tr(Math.floor(p.data.preparation / 60))}{tr(":")}{tr(String(p.data.preparation % 60).padStart(2, "0"))}
+                            <span>{p.data.source_metadata?.technical_passport_complete===false?tr("Подготовка не указана"):<>{tr("Подготовка ")}{tr(Math.floor(p.data.preparation / 60))}{tr(":")}{tr(String(p.data.preparation % 60).padStart(2, "0"))}</>}
                             </span>
                           </p>
                           <div>
-                            <Badge value="Активна" />
+                            <Badge value={p.data.source_metadata?.technical_passport_complete===false?"Паспорт требует заполнения":"Активна"} />
                             <small>
                               {ru(resource(p.data.home_venue)?.name)}
                             </small>
@@ -1734,13 +1735,14 @@ function App() {
                       </div>
                       <div>
                         <small>{tr("БАЗОВАЯ ПОДГОТОВКА")}</small>
-                        <b>{tr(selected.data.preparation)}{tr(" мин")}</b>
+                        <b>{selected.data.source_metadata?.technical_passport_complete===false?tr("Не указана"):<>{tr(selected.data.preparation)}{tr(" мин")}</>}</b>
                       </div>
                       <div>
                         <small>{tr("ОСНОВНАЯ ПЛОЩАДКА")}</small>
                         <b>{ru(resource(selected.data.home_venue)?.name)}</b>
                       </div>
                     </div>
+                    <ImportedData data={selected.data} resource={resource}/>
                     <div className="segmented big">
                       <button
                         className={tab === "Люди" ? "chosen" : ""}
@@ -1762,7 +1764,7 @@ function App() {
                               <b>{tr(ru(r.role))}</b>
                               <span>{tr("A · ")}{ru(resource(r.A)?.name)}</span>
                               <span>{tr("B · ")}{ru(resource(r.B)?.name)}</span>
-                              <small>{tr("Резерв · ")}{ru(resource(r.reserve)?.name)}
+                              <small>{tr("Допущенные исполнители · ")}{(r.eligible||[]).map((id:number)=>resource(id)?.name).filter(Boolean).join(", ")||"—"}
                               </small>
                             </div>
                           ))}
@@ -2159,19 +2161,14 @@ function App() {
                         </select>
                       </div>
                       <div className="property-grid">
-                        {Object.entries(selected.data).map(([k, v]: any) => (
+                        {Object.entries(selected.data).filter(([k])=>!isImportedMetadata(k)).map(([k, v]) => (
                           <div key={k}>
-                            <small>{tr(ru(k))}</small>
-                            <b>
-                              {Array.isArray(v)
-                                ? v
-                                    .map((x) => resource(x)?.name || x)
-                                    .join(", ")
-                                : ru(v)}
-                            </b>
+                            <small>{importedLabel(k)}</small>
+                            <DataValue value={v} field={k} resource={resource}/>
                           </div>
                         ))}
                       </div>
+                      <ImportedData data={selected.data} resource={resource}/>
                       {selected.kind === "Venue" && (
                         <>
                           <h3>{tr("Механика и позиции")}</h3>

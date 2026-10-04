@@ -464,3 +464,8 @@ Object.assign(english,{
  "Другой сервер":"Custom endpoint","Комплект оборудования":"Equipment kit","Помещение":"Room","Декорация":"Scenery","Софит":"Lighting batten","Штанкет":"Fly bar","Световая позиция":"Lighting position"
 });
 Object.assign(english,{"сотрудник":"staff member","добавить сотрудника":"add staff member","Кто ведёт звук на Северном ветре?":"Who runs sound for this production?"});
+Object.assign(english,{
+ 'Участие в постановках':'Production participation','Источники':'Sources','Должности по источникам':'Positions in sources','Дата сбора сведений':'Collection date','Указан в разделе команды':'Listed on the team page','Сведения о занятости':'Employment information','Должность / участие':'Position / participation','Раздел':'Section','Источник':'Source','Продолжительность по источнику':'Duration in source','Возрастное ограничение':'Age rating','Премьера':'Premiere','Технический паспорт заполнен':'Technical passport complete','Сведения об источнике':'Source information','Постановочная команда':'Production credits','Сведения из источников':'Source information','Допущенные исполнители · ':'Eligible performers · ','Не указана':'Not specified','Подготовка не указана':'Preparation not specified','Паспорт требует заполнения':'Passport needs completion',
+ 'Участие в спектакле не подтверждает текущую работу в театре. Проверьте сведения о сотруднике.':'A production credit does not confirm current employment. Verify this person’s information.',
+ 'Составы и технический паспорт требуют заполнения. Время подготовки и технические требования пока не определены.':'Complete the casts and technical passport. Preparation time and technical requirements have not been specified.'
+});

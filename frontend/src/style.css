@@ -1402,3 +1402,8 @@ details > form {
 }
 .language-switch { display:flex; align-items:center; gap:8px; color:var(--muted); font-size:12px; }
 .language-switch select { padding:7px 9px; width:auto; border-radius:9px; }
+
+/* Structured imported facts and provenance */
+.data-text{white-space:pre-wrap;overflow-wrap:anywhere;font-weight:400}.data-list{padding-left:20px;margin:8px 0;max-width:100%}.data-list>li{margin:8px 0}.data-fields{margin:8px 0;border-left:2px solid var(--border,#dde5e1);padding-left:14px}.data-fields>div{margin:9px 0}.data-fields dt,.import-field>small{font-size:12px;color:#657c73;display:block;margin-bottom:5px}.data-fields dd{margin:0;font-weight:400}.imported-data{margin:20px 0}.imported-data details{margin:14px 0;max-height:480px;overflow:auto}.imported-data summary{cursor:pointer;font-weight:600}.imported-data summary span{margin-left:8px;color:#657c73}.import-field{margin:12px 0}.imported-data a,.property-grid a{overflow-wrap:anywhere;color:#286951}.import-notice{padding:12px 16px;background:#fff6e3;border-radius:10px;color:#805d23}.property-grid pre{white-space:pre-wrap;overflow-wrap:anywhere}
+
+.source-entry{padding:10px 0;border-bottom:1px solid #e7eeea}.source-entry p{margin:6px 0}.source-entry .data-list{margin:5px 0}
