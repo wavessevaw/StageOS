@@ -25,7 +25,9 @@ def network(tmp_path,monkeypatch):
         assert login(c,tid).status_code==200
         clients.append(c)
     try:yield host,local,clients,tid,address,status['code']
-    finally:host.state.network.stop_server()
+    finally:
+        host.state.network.stop_server();host.state.network.workspace.state.registry.close()
+        for c in clients:c.app.state.network.workspace.state.registry.close()
 
 def test_two_clients_share_database_notifications_export_and_restart(network,tmp_path):
     host,local,(a,b),tid,address,code=network
@@ -120,3 +122,16 @@ def test_invalid_connection_configuration_and_origin(tmp_path,monkeypatch):
     assert c.post('/api/connection',content=b'broken',headers={'content-type':'application/json'}).status_code==422
     assert c.post('/api/connection',headers={'Origin':'https://evil.example'},json={'mode':'local'}).status_code==403
     assert c.get('/api/connection').json()['mode']=='local'
+
+
+def test_registry_close_releases_database_and_sessions(tmp_path,monkeypatch):
+    monkeypatch.delenv('STAGEOS_TOKEN',raising=False)
+    monkeypatch.delenv('STAGEOS_DATABASE_URL',raising=False)
+    app=create_desktop_app(tmp_path);c=TestClient(app);tid=theatre(c);login(c,tid)
+    registry=app.state.network.workspace.state.registry
+    path=registry.theatre(tid)['path']
+    registry.close()
+    assert not registry.apps and not registry.sessions
+    from pathlib import Path
+    Path(path).unlink()
+    assert not Path(path).exists()

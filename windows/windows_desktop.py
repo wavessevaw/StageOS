@@ -54,7 +54,9 @@ def self_test():
                         assert remote.get(address+'/api/network/hello').json()['product']=='StageOS Server'
                         assert remote.post(address+'/api/auth/login',json={'theatre_id':tid,'login':'network-test','password':'network-test-password'}).status_code==200
                         assert remote.get(address+'/api/bootstrap').status_code==200
-                finally:gateway.state.network.stop_server()
+                finally:
+                    gateway.state.network.stop_server()
+                    gateway.state.network.workspace.state.registry.close()
                 return {'network_server':'PASS','status':'PASS' ,'python':sys.version,'platform':sys.platform,'solver':plan['solver']['status'],'empty_database':'PASS','event_saved':ev.id,'desktop_gui':'NOT_TESTED','pdf_export':'PASS','png_export':'PASS'}
         finally:
             engine.dispose()
@@ -159,6 +161,7 @@ def main():
         server.should_exit = True
         thread.join(timeout=5)
         app.state.network.stop_server()
+        app.state.network.workspace.state.registry.close()
         listener.close()
     if gui_test and (gui_result.get("status")!="PASS" or thread.is_alive()):
         raise RuntimeError("Проверка окна или завершения сервера не пройдена")

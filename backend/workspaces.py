@@ -73,6 +73,12 @@ class Registry:
             else:engine.dispose()
         if bootstrap_file and Path(bootstrap_file).is_file():self.bootstrap(Path(bootstrap_file))
 
+    def close(self):
+        """Release SQLite handles after the HTTP listeners have stopped."""
+        with self.lock:
+            for app in self.apps.values():app.state.Session.kw['bind'].dispose()
+            self.apps.clear();self.sessions.clear()
+
     @contextmanager
     def db(self):
         d=sqlite3.connect(self.path,timeout=30);d.row_factory=sqlite3.Row;d.execute('PRAGMA foreign_keys=ON')
