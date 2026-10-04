@@ -34,6 +34,8 @@ jobs:
         working-directory: frontend
       - run: npx playwright test --config playwright.accounts.config.ts | tee ../release-accounts-ui-results.txt
         working-directory: frontend
+      - run: npx playwright test --config playwright.network.config.ts | tee ../release-network-ui-results.txt
+        working-directory: frontend
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -42,6 +44,7 @@ jobs:
             ui-results.json
             release-ui-results.json
             accounts-ui-results.json
+            network-ui-results.json
             frontend/test-results
       - uses: actions/upload-artifact@v4
         with:
@@ -51,6 +54,7 @@ jobs:
             ui-results.json
             release-ui-results.json
             accounts-ui-results.json
+            network-ui-results.json
   windows-portable:
     runs-on: windows-2022
     timeout-minutes: 30
@@ -90,6 +94,17 @@ jobs:
           if ($process.ExitCode -ne 0) { throw 'Native GUI test failed' }
           $receipt = Get-Content (Join-Path $env:STAGEOS_HOME 'gui-selftest.json') | ConvertFrom-Json
           if ($receipt.status -ne 'PASS') { throw 'Window receipt failed' }
+      - name: Запуск StageOS Server.exe и сетевого слушателя
+        shell: pwsh
+        run: |
+          $env:STAGEOS_HOME = Join-Path $env:RUNNER_TEMP 'StageOS-server-gui-test'
+          $process = Start-Process -FilePath './artifacts/StageOS-Portable/StageOS Server.exe' -ArgumentList '--gui-test' -PassThru
+          if (-not $process.WaitForExit(90000)) { Stop-Process -Id $process.Id -Force; throw 'Server window test timed out' }
+          Get-Content (Join-Path $env:STAGEOS_HOME 'gui-selftest.json') -ErrorAction SilentlyContinue
+          Get-Content (Join-Path $env:STAGEOS_HOME 'startup-error.log') -ErrorAction SilentlyContinue
+          if ($process.ExitCode -ne 0) { throw 'Server executable failed' }
+          $receipt = Get-Content (Join-Path $env:STAGEOS_HOME 'gui-selftest.json') | ConvertFrom-Json
+          if ($receipt.status -ne 'PASS' -or $receipt.network_server -ne 'PASS') { throw 'Server GUI receipt failed' }
       - uses: actions/upload-artifact@v4
         with:
           name: StageOS-Windows-Portable
@@ -103,3 +118,5 @@ jobs:
             ${{ runner.temp }}/StageOS-selftest/*.log
             ${{ runner.temp }}/StageOS-gui-test/*.json
             ${{ runner.temp }}/StageOS-gui-test/*.log
+            ${{ runner.temp }}/StageOS-server-gui-test/*.json
+            ${{ runner.temp }}/StageOS-server-gui-test/*.log

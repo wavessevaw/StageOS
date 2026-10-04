@@ -47,7 +47,7 @@ class LoginBody(BaseModel):
 class Registry:
     def __init__(self,home,static_dir=None,bootstrap_file=None):
         self.home=Path(home);self.home.mkdir(parents=True,exist_ok=True)
-        self.path=self.home/'accounts.sqlite';self.lock=threading.RLock();self.apps={};self.sessions={};self.attempts={};self.static_dir=static_dir;self.dummy_hash=password_hash(secrets.token_urlsafe(32))
+        self.path=self.home/'accounts.sqlite';self.lock=threading.RLock();self.apps={};self.mutation_locks={};self.revisions={};self.sessions={};self.attempts={};self.static_dir=static_dir;self.dummy_hash=password_hash(secrets.token_urlsafe(32))
         with self.db() as d:
             d.executescript('''CREATE TABLE IF NOT EXISTS theatres(id TEXT PRIMARY KEY,name TEXT NOT NULL,path TEXT NOT NULL UNIQUE);
             CREATE TABLE IF NOT EXISTS users(id TEXT PRIMARY KEY,theatre_id TEXT NOT NULL REFERENCES theatres(id),name TEXT NOT NULL,login TEXT NOT NULL,password TEXT NOT NULL,role TEXT NOT NULL,active INTEGER NOT NULL DEFAULT 1,UNIQUE(theatre_id,login));
@@ -133,7 +133,7 @@ class TenantDispatch:
         origin=req.headers.get('origin')
         if origin and origin not in [str(req.base_url).rstrip('/'),'http://localhost:5173','http://127.0.0.1:5173']:
             return await JSONResponse({'detail':'Источник запроса запрещён'},403)(scope,receive,send)
-        if path.startswith('/api/auth/'):return await self.app(scope,receive,send)
+        if path.startswith('/api/auth/') or path=='/api/sync':return await self.app(scope,receive,send)
         try:
             u=self.r.current(req);method=req.method
             if u['role']!='admin' and (path.startswith('/api/database/') or path.startswith('/api/settings/llm') or path=='/api/diagnostics'):raise HTTPException(403,'Требуются права администратора')
@@ -162,7 +162,18 @@ class TenantDispatch:
                 if message['type']=='http.response.start':status=message['status']
                 await send(message)
             tenant=self.r.tenant(u['theatre_id'])
-            await tenant(scope,downstream,outgoing)
+            # Serialize writes across LAN and local host event loops. Recompute preview
+            # and commit inside the same critical section; stale versions still fail.
+            if method in ['POST','PUT','PATCH','DELETE']:
+                import anyio
+                with self.r.lock:mutation=self.r.mutation_locks.setdefault(u['theatre_id'],threading.Lock())
+                await anyio.to_thread.run_sync(mutation.acquire)
+                try:
+                    await tenant(scope,downstream,outgoing)
+                    if 200<=status<300 and path not in read_only:
+                        with self.r.lock:self.r.revisions[u['theatre_id']]=self.r.revisions.get(u['theatre_id'],0)+1
+                finally:mutation.release()
+            else:await tenant(scope,downstream,outgoing)
             if path=='/api/database/import' and status==200:
                 with self.r.lock,self.r.db() as d,tenant.state.Session() as s:
                     database=str(Path(s.bind.url.database).resolve());d.execute('UPDATE theatres SET path=? WHERE id=?',(database,u['theatre_id']))
@@ -184,6 +195,11 @@ def create_workspace_app(home=None,static_dir=None,bootstrap_file=None):
     @app.get('/api/auth/theatres')
     def theatres():
         with r.db() as d:return {'enabled':True,'theatres':[{'id':x['id'],'name':x['name'],'needs_setup':not x['users']} for x in d.execute('SELECT t.id,t.name,COUNT(u.id) users FROM theatres t LEFT JOIN users u ON u.theatre_id=t.id GROUP BY t.id ORDER BY t.name')]}
+
+    @app.get('/api/sync')
+    def sync(req:Request):
+        u=r.current(req)
+        return {'revision':r.revisions.get(u['theatre_id'],0)}
 
     @app.get('/api/auth/session')
     def session(req:Request):

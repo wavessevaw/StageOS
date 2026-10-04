@@ -79,3 +79,10 @@ The portable Win32 launcher is PE32+ x64 with Windows GUI subsystem, compiled us
 ## Local theatre accounts (1.0.3)
 
 The production schema remains unchanged. A separate accounts.sqlite registry stores theatre IDs, database paths, salted password hashes, memberships and account audits. The HTTP workspace gateway authenticates requests and dispatches them to an application with its own SQLAlchemy Session for each theatre. No global session is rebound when switching theatres. Database import updates only that theatre’s persisted path. Runtime sessions are opaque, hashed in memory and do not survive server restart. Public builds contain no initial user credentials. The test-only core launcher flag is used explicitly by historical core UI regression suites; normal desktop and backend entrypoints always use the gateway.
+
+
+## StageOS Server 1.0.4
+
+The desktop localhost gateway owns connection.json and serves the bundled React UI. In host mode a second Uvicorn listener on 0.0.0.0 serves the same workspace registry/core apps. LAN requests require a random connection code followed by a per-user theatre session. Theatre creation and first-admin setup remain host-local. In client mode API requests are proxied to the selected host; binary exports and HttpOnly cookies are forwarded. No production data is copied to the client. HTTPX clients have no shared cookie jar across users.
+
+SQLite databases and accounts.sqlite remain on the host. Thread locks serialize mutations across both event loops, while core fingerprints and event/production versions reject stale confirmations. Per-theatre revisions let React refresh every five seconds. Client connection failure returns 503 without a local-write fallback. Restart invalidates sessions. The host is not a Windows service. LAN transport is HTTP; internet access requires external HTTPS or VPN.

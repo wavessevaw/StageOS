@@ -7,9 +7,10 @@ PORTABLE=ROOT/'artifacts/StageOS-Portable'
 VERSION=json.loads((ROOT/'frontend/package.json').read_text())['version']
 OUT=ROOT.parent/f'StageOS-Release-{VERSION}.zip'
 files=[(p,'StageOS/Windows-Portable/'+p.relative_to(PORTABLE).as_posix()) for p in sorted(PORTABLE.rglob('*')) if p.is_file() and '__pycache__' not in p.parts]
-for name in ['README.md','README_EN.md','README_RU.md','ARCHITECTURE.md','RELEASE_GATE_1_0_RU.md','RELEASE_AUDIT_RU.md','TEST_RESULTS.md','BUILD_RESULTS.md','THIRD_PARTY.md','release-test-results.txt','release-ui-results.txt','release-empty-ui-results.txt','release-accounts-ui-results.txt','release-static-results.txt','release-build-results.txt']:
+for name in ['README.md','README_EN.md','README_RU.md','ARCHITECTURE.md','RELEASE_GATE_1_0_RU.md','RELEASE_AUDIT_RU.md','TEST_RESULTS.md','BUILD_RESULTS.md','THIRD_PARTY.md','release-test-results.txt','release-ui-results.txt','release-empty-ui-results.txt','release-accounts-ui-results.txt','release-network-ui-results.txt','release-static-results.txt','release-build-results.txt']:
  files.append((ROOT/name,'StageOS/'+name))
 for p in sorted((ROOT/'docs/media').glob('*.svg')):files.append((p,'StageOS/docs/media/'+p.name))
+files.append((ROOT/'docs/SERVER_SETUP_RU.md','StageOS/docs/SERVER_SETUP_RU.md'))
 files.append((ROOT/'docs/ACCOUNTS_RU.md','StageOS/docs/ACCOUNTS_RU.md'))
 files.append((ROOT/'docs/SCHEDULE_MODEL_REVIEW_RU.md','StageOS/docs/SCHEDULE_MODEL_REVIEW_RU.md'))
 files.append((ROOT/'database/stageos-empty.db','StageOS/database/stageos-empty.db'))
@@ -23,6 +24,7 @@ with ZipFile(OUT) as z:
  assert z.testzip() is None
  assert not any(n.endswith(('seed.py','scenarios.py','stageos-demo.db','bootstrap-accounts.json','accounts.sqlite')) for n in z.namelist())
  assert 'StageOS/Windows-Portable/StageOS.exe' in z.namelist()
+ assert 'StageOS/Windows-Portable/StageOS Server.exe' in z.namelist()
 with sqlite3.connect(ROOT/'database/stageos-empty.db') as db:
  assert db.execute('pragma integrity_check').fetchone()[0]=='ok'
  counts={t:db.execute('select count(*) from '+t).fetchone()[0] for t in ['resources','productions','events','bookings','tasks','audit','settings']}

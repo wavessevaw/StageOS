@@ -38,7 +38,24 @@ def self_test():
                 pages=build_pages([],[],[],date(2026,12,1),date(2026,12,1))
                 assert export(pages,'pdf')[0].startswith(b'%PDF-')
                 assert export(pages,'png')[0].startswith(b'\x89PNG')
-                return {'status':'PASS','python':sys.version,'platform':sys.platform,'solver':plan['solver']['status'],'empty_database':'PASS','event_saved':ev.id,'desktop_gui':'NOT_TESTED','pdf_export':'PASS','png_export':'PASS'}
+                # Real TCP round-trip using the packaged runtime and dependencies.
+                from backend.network import create_desktop_app
+                from fastapi.testclient import TestClient
+                import httpx,socket
+                gateway=create_desktop_app(Path(tmp)/'network');client=TestClient(gateway,headers={"X-StageOS-Token":os.environ.get("STAGEOS_TOKEN","")})
+                response=client.post('/api/auth/theatres',json={'theatre_name':'Проверка сети','name':'Проверка администратора','login':'network-test','password':'network-test-password'})
+                assert response.status_code==200
+                tid=response.json()['id']
+                with socket.socket() as probe:probe.bind(('127.0.0.1',0));network_port=probe.getsockname()[1]
+                try:
+                    gateway.state.network.start_server(network_port)
+                    address=f'http://127.0.0.1:{network_port}'
+                    with httpx.Client(trust_env=False,headers={'X-StageOS-Code':gateway.state.network.config['code']}) as remote:
+                        assert remote.get(address+'/api/network/hello').json()['product']=='StageOS Server'
+                        assert remote.post(address+'/api/auth/login',json={'theatre_id':tid,'login':'network-test','password':'network-test-password'}).status_code==200
+                        assert remote.get(address+'/api/bootstrap').status_code==200
+                finally:gateway.state.network.stop_server()
+                return {'network_server':'PASS','status':'PASS' ,'python':sys.version,'platform':sys.platform,'solver':plan['solver']['status'],'empty_database':'PASS','event_saved':ev.id,'desktop_gui':'NOT_TESTED','pdf_export':'PASS','png_export':'PASS'}
         finally:
             engine.dispose()
 
@@ -50,6 +67,16 @@ def main():
             json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8"
         )
         return
+    # One running desktop/server per data directory, including two different EXEs.
+    import ctypes,hashlib
+    kernel=ctypes.WinDLL('kernel32',use_last_error=True)
+    kernel.CreateMutexW.argtypes=[ctypes.c_void_p,ctypes.c_bool,ctypes.c_wchar_p]
+    kernel.CreateMutexW.restype=ctypes.c_void_p
+    mutex=kernel.CreateMutexW(None,False,'Local\\StageOS-'+hashlib.sha256(str(HOME.resolve()).casefold().encode()).hexdigest()[:24])
+    if not mutex:raise ctypes.WinError(ctypes.get_last_error())
+    if ctypes.get_last_error()==183:
+        ctypes.windll.user32.MessageBoxW(None,'StageOS уже запущен для этой базы. Используйте открытое окно или закройте его перед запуском другого режима.','StageOS',0x40)
+        return
     import uvicorn
     from backend.app import create_app
 
@@ -58,9 +85,11 @@ def main():
     import ctypes
     ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("StageOS.Desktop")
 
-    from backend.workspaces import create_workspace_app
+    from backend.network import create_desktop_app
     profile = ROOT.parent / "bootstrap-accounts.json"
-    app = create_workspace_app(bootstrap_file=profile if profile.is_file() else None)
+    app = create_desktop_app(bootstrap_file=profile if profile.is_file() else None)
+    if "--server" in sys.argv and app.state.network.config["mode"] != "server":
+        app.state.network.start_server(8765)
     listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     listener.bind(("127.0.0.1", 0))
     port = listener.getsockname()[1]
@@ -110,7 +139,8 @@ def main():
             assert window.evaluate_js("Boolean(sessionStorage.getItem('stageos-token'))")
             assert window.evaluate_js("location.search === ''")
             assert window.native.Icon is not None
-            gui_result.update(status="PASS",window="WebView2",react="PASS",token="PASS",icon="PASS",platform=sys.platform)
+            if "--server" in sys.argv:assert app.state.network.status()["running"]
+            gui_result.update(status="PASS",window="WebView2",react="PASS",token="PASS",icon="PASS",platform=sys.platform,network_server="PASS" if "--server" in sys.argv else "NOT_REQUESTED")
         except Exception:
             gui_result.update(status="FAILED",traceback=traceback.format_exc())
         finally:
@@ -128,6 +158,7 @@ def main():
     finally:
         server.should_exit = True
         thread.join(timeout=5)
+        app.state.network.stop_server()
         listener.close()
     if gui_test and (gui_result.get("status")!="PASS" or thread.is_alive()):
         raise RuntimeError("Проверка окна или завершения сервера не пройдена")

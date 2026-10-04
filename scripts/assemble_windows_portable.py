@@ -86,12 +86,13 @@ for folder in ["backend", "migrations"]:
 shutil.copytree(ROOT / "frontend/dist", app / "frontend/dist", dirs_exist_ok=True)
 shutil.copyfile(ROOT / "windows/windows_desktop.py", app / "windows_desktop.py")
 shutil.copyfile(ROOT / "windows/StageOS.exe", OUT / "StageOS.exe")
+shutil.copyfile(ROOT / "windows/StageOS.exe", OUT / "StageOS Server.exe")
 shutil.copyfile(ROOT / "windows/StageOS.ico", OUT / "StageOS.ico")
 (OUT / "WINDOWS_RUNTIME_MANIFEST.json").write_text(
     json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
 )
 (OUT / "START_HERE_RU.txt").write_text(
-    "StageOS 1.0.3\n\n1. Распакуйте всю папку в любое место.\n2. Запустите StageOS.exe двойным щелчком.\n3. Выберите театр или создайте свой.\n4. Войдите по логину и паролю.\n\nPython, сервер базы и терминал запускать не нужно.\nДля окна требуется Microsoft Edge WebView2 Runtime (обычно уже установлен в Windows 11).\nДанные: %LOCALAPPDATA%\\StageOS-Work. Ошибки старта: startup-error.log в том же каталоге.\n\nWindows runtime включён. Сборка и запуск окна проверяются на Windows Server 2022 в GitHub Actions. Ручная проверка на Windows 10/11 не выполнена. Перед распаковкой скачанного ZIP снимите блокировку в его свойствах, если она есть.\n",
+    "StageOS 1.0.4\n\n1. Распакуйте всю папку в любое место.\n2. Запустите StageOS.exe двойным щелчком.\n3. Для общей базы на главном ПК откройте StageOS Server.exe; на остальных — StageOS.exe.\n4. Инструкция: docs/SERVER_SETUP_RU.md в основном архиве.\n5. Выберите театр или создайте свой.\n6. Войдите по логину и паролю.\n\nPython, сервер базы и терминал запускать не нужно.\nДля окна требуется Microsoft Edge WebView2 Runtime (обычно уже установлен в Windows 11).\nДанные: %LOCALAPPDATA%\\StageOS-Work. Ошибки старта: startup-error.log в том же каталоге.\n\nWindows runtime включён. Сборка и запуск окна проверяются на Windows Server 2022 в GitHub Actions. Ручная проверка на Windows 10/11 не выполнена. Перед распаковкой скачанного ZIP снимите блокировку в его свойствах, если она есть.\n",
     encoding="utf-8",
 )
 print(OUT)

@@ -1,6 +1,8 @@
+**StageOS Server 1.0.4:** host your theatre database on your PC and connect staff desktops with an address, connection code and personal accounts. [Setup guide (Russian)](docs/SERVER_SETUP_RU.md).
+
 <div align="center">
 
-Version 1.0.3 adds isolated theatre workspaces, personal sign-in and administrator/planner/viewer roles. Switch theatres and manage your team from the account menu.
+Version 1.0.4 adds isolated theatre workspaces, personal sign-in and administrator/planner/viewer roles. Switch theatres and manage your team from the account menu.
 
 <img src="docs/media/icon.svg" width="120" alt="StageOS">
 

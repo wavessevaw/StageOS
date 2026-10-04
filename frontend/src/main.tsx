@@ -245,6 +245,10 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
       setError(ru(e.message));
     }
   }
+  useEffect(()=>{if(!account)return;let stopped=false;let seen:number|undefined;
+    const poll=async()=>{try{const next=await api('/sync');if(stopped)return;if(seen!==undefined&&seen!==next.revision){await load();setRevision(v=>v+1)}seen=next.revision}catch{}};
+    poll();const timer=setInterval(poll,5000);return()=>{stopped=true;clearInterval(timer)};
+  },[account?.theatre.id]);
   useEffect(() => {
     load();
     const fn = (e: KeyboardEvent) => {
@@ -876,7 +880,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
           )))}
         </nav>
         <div className="sidebar-bottom">
-          <span className="online" />{tr("Локальная база данных")}<small>{tr("StageOS · 1.0.3")}</small>
+          <span className="online" />{tr("Локальная база данных")}<small>{tr("StageOS · 1.0.4")}</small>
         </div>
       </aside>
       <main>

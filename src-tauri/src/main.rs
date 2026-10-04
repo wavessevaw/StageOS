@@ -17,7 +17,7 @@ fn main() {
         if let Some(status)=child.try_wait()? {return Err(format!("StageOS backend exited: {status}").into());}
         if let Ok(mut stream)=TcpStream::connect_timeout(&format!("127.0.0.1:{port}").parse()?,Duration::from_millis(200)) {
             stream.set_read_timeout(Some(Duration::from_millis(500)))?;
-            let request=format!("GET /api/bootstrap HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nX-StageOS-Token: {token}\r\nConnection: close\r\n\r\n");
+            let request=format!("GET /api/auth/theatres HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nX-StageOS-Token: {token}\r\nConnection: close\r\n\r\n");
             let _=stream.write_all(request.as_bytes());let mut buf=[0;128];
             if let Ok(n)=stream.read(&mut buf) {if String::from_utf8_lossy(&buf[..n]).contains("200 OK") {ready=true;break;}}
         }
