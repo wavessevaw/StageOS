@@ -4,7 +4,7 @@ test('StageOS Server → connect with code → sign in → shared changes refres
  const created=await host.request.post('/api/auth/theatres',{data:{theatre_name:'Общий театр',name:'Администратор сервера',login:'admin',password:'test-password'}});expect(created.ok()).toBeTruthy();const tid=(await created.json()).id;
  expect((await host.request.post('/api/auth/login',{data:{theatre_id:tid,login:'admin',password:'test-password'}})).ok()).toBeTruthy();
  const start=await host.request.post('/api/connection',{data:{mode:'server',port:8885}});expect(start.ok()).toBeTruthy();const code=(await start.json()).code;
- await host.request.post('/api/auth/login',{data:{theatre_id:tid,login:'admin',password:'test-password'}});
+ expect((await host.request.get('/api/bootstrap')).ok()).toBeTruthy();
  await host.goto('/');await expect(host.getByRole('button',{name:'Календарь',exact:true})).toBeVisible();
  await page.goto('/');await page.getByRole('button',{name:'Настроить подключение',exact:true}).click();await expect(page.getByRole('heading',{name:'Подключение к общей базе'})).toBeVisible();
  await page.getByRole('button',{name:'Подключиться к серверу',exact:true}).click();await page.screenshot({path:test.info().outputPath('connection.png')});await page.getByLabel('Адрес сервера').fill('127.0.0.1:8885');await page.getByLabel('Код подключения').fill('wrong-code');await page.getByRole('button',{name:'Проверить и подключиться'}).click();await expect(page.getByRole('alert')).toContainText('Неверный код');

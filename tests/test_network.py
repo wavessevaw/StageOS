@@ -16,7 +16,7 @@ def network(tmp_path,monkeypatch):
     tid=theatre(local);assert login(local,tid).status_code==200
     with socket.socket() as sock:sock.bind(('127.0.0.1',0));port=sock.getsockname()[1]
     r=local.post('/api/connection',json={'mode':'server','port':port});assert r.status_code==200,r.text
-    status=r.json();assert status['running'];assert login(local,tid).status_code==200
+    status=r.json();assert status['running'];assert local.get('/api/bootstrap').status_code==200
     address=f'http://127.0.0.1:{port}'
     clients=[]
     for index in range(2):
@@ -135,3 +135,70 @@ def test_registry_close_releases_database_and_sessions(tmp_path,monkeypatch):
     from pathlib import Path
     Path(path).unlink()
     assert not Path(path).exists()
+
+
+def test_host_configuration_keeps_login_and_running_listener(network):
+    host,local,clients,tid,address,code=network
+    controller=host.state.network
+    token=local.cookies.get('stageos_session')
+    thread=controller.thread
+    for _ in range(2):
+        result=local.post('/api/connection',json={'mode':'server','port':controller.config['port']})
+        assert result.status_code==200,result.text
+        assert 'set-cookie' not in result.headers
+        assert local.cookies.get('stageos_session')==token
+        assert local.get('/api/bootstrap').status_code==200
+        assert controller.thread is thread
+    # A non-Windows runner rejects the platform, not the authenticated session.
+    import os
+    if os.name!='nt':
+        result=local.post('/api/connection/firewall')
+        assert result.status_code==422
+        assert 'Windows' in result.json()['detail']
+    assert local.post('/api/connection',json={'mode':'local'}).status_code==200
+    assert local.cookies.get('stageos_session')==token
+    assert local.get('/api/bootstrap').status_code==200
+
+
+def test_entering_and_leaving_remote_mode_clears_session(network):
+    host,local,(a,b),tid,address,code=network
+    token=a.cookies.get('stageos_session');assert token
+    result=a.post('/api/connection',json={'mode':'client','address':address,'code':code})
+    assert result.status_code==200
+    assert a.cookies.get('stageos_session') is None
+    assert a.get('/api/bootstrap').status_code==401
+    assert login(a,tid).status_code==200
+    assert a.post('/api/connection',json={'mode':'local'}).status_code==200
+    assert a.cookies.get('stageos_session') is None
+    assert a.get('/api/bootstrap').status_code==401
+
+
+def test_firewall_waits_for_actual_success(monkeypatch):
+    import base64
+    import subprocess
+    from backend.network import run_firewall_setup
+    calls=[]
+    def run(args,**kwargs):
+        calls.append((args,kwargs))
+        return subprocess.CompletedProcess(args,0)
+    monkeypatch.setattr(subprocess,'run',run)
+    assert run_firewall_setup(8765)['ok']
+    args,kwargs=calls[0]
+    script=base64.b64decode(args[-1]).decode('utf-16-le')
+    assert '-Wait -PassThru' in script and 'exit $p.ExitCode' in script
+    assert '-Verb RunAs' in script and '-Port 8765' in script
+    assert kwargs['timeout']==120
+
+
+@pytest.mark.parametrize('failure',['exit','timeout','missing'])
+def test_firewall_never_reports_success_on_failure(monkeypatch,failure):
+    import subprocess
+    from fastapi import HTTPException
+    from backend.network import run_firewall_setup
+    def run(args,**kwargs):
+        if failure=='timeout':raise subprocess.TimeoutExpired(args,120)
+        if failure=='missing':raise FileNotFoundError()
+        return subprocess.CompletedProcess(args,1)
+    monkeypatch.setattr(subprocess,'run',run)
+    with pytest.raises(HTTPException) as error:run_firewall_setup(8765)
+    assert error.value.status_code==422

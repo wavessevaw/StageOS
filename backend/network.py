@@ -3,7 +3,10 @@
 Clients proxy API requests to the host; database files never leave the host
 except through the explicit administrator export command.
 """
+import base64
 import json
+import subprocess
+import sys
 import os
 import secrets
 import socket
@@ -85,6 +88,8 @@ class NetworkController:
     def start_server(self, port):
         if isinstance(port,bool) or not isinstance(port,int) or not 1024 <= port <= 65535:
             raise ValueError('Порт сервера: от 1024 до 65535')
+        if self.config['mode']=='server' and self.config['port']==port and self.status()['running']:
+            return
         self.stop_server()
         listener = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
         try:listener.bind(('0.0.0.0',port))
@@ -160,6 +165,7 @@ def create_desktop_app(home=None,static_dir=None,bootstrap_file=None):
         body=await req.json()
         if not isinstance(body,dict):raise HTTPException(422,'Проверьте настройки подключения')
         mode=body.get('mode')
+        previous_mode=controller.config['mode']
         try:
             if controller.server:
                 user=workspace.state.registry.current(req)
@@ -191,7 +197,12 @@ def create_desktop_app(home=None,static_dir=None,bootstrap_file=None):
         except httpx.HTTPStatusError as error:
             raise HTTPException(422,'Неверный код подключения' if error.response.status_code==403 else 'Сервер отклонил подключение')
         except httpx.HTTPError:raise HTTPException(503,'Не удалось подключиться. Проверьте адрес, сеть и брандмауэр сервера.')
-        result=JSONResponse(controller.status());result.delete_cookie('stageos_session',path='/api');return result
+        result=JSONResponse(controller.status())
+        # Local and server modes share the same registry and theatre identity.
+        # Clear only when entering/leaving/reconfiguring a remote connection.
+        if previous_mode=='client' or mode=='client':
+            result.delete_cookie('stageos_session',path='/api')
+        return result
 
     @app.post('/api/connection/firewall')
     def firewall(req:Request):
@@ -199,13 +210,29 @@ def create_desktop_app(home=None,static_dir=None,bootstrap_file=None):
         if user['role']!='admin':raise HTTPException(403,'Требуются права администратора')
         if os.name!='nt':raise HTTPException(422,'Настройка брандмауэра доступна только в Windows')
         if not controller.server:raise HTTPException(422,'Сначала запустите сервер')
-        import ctypes,subprocess,sys
-        script=Path(__file__).resolve().parent/'firewall.ps1'
-        args=subprocess.list2cmdline(['-NoProfile','-ExecutionPolicy','Bypass','-File',str(script),'-Port',str(controller.config['port']),'-RuntimePath',sys.executable])
-        execute=ctypes.windll.shell32.ShellExecuteW
-        execute.argtypes=[ctypes.c_void_p,ctypes.c_wchar_p,ctypes.c_wchar_p,ctypes.c_wchar_p,ctypes.c_wchar_p,ctypes.c_int]
-        execute.restype=ctypes.c_void_p
-        result=execute(None,'runas','powershell.exe',args,None,1) or 0
-        if result<=32:raise HTTPException(422,'Разрешение Windows не получено. Повторите настройку.')
-        return {'ok':True,'message':'Подтвердите запрос Windows. Правило создаётся только для частной локальной сети.'}
+        return run_firewall_setup(controller.config['port'])
     return app
+
+
+def run_firewall_setup(port):
+    """Wait for elevated PowerShell and report its actual exit status to the UI."""
+    script=Path(__file__).resolve().parent/'firewall.ps1'
+    args=subprocess.list2cmdline(['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass',
+                                 '-File',str(script),'-Port',str(port),'-RuntimePath',sys.executable])
+    quoted=args.replace("'", "''")
+    command=("$ErrorActionPreference='Stop'; try { "
+             " $p=Start-Process -FilePath 'powershell.exe' -Verb RunAs -WindowStyle Hidden "
+             f"-ArgumentList '{quoted}' -Wait -PassThru -ErrorAction Stop; exit $p.ExitCode "
+             "} catch { Write-Error $_; exit 1 }")
+    encoded=base64.b64encode(command.encode('utf-16-le')).decode('ascii')
+    try:
+        completed=subprocess.run(
+            ['powershell.exe','-NoProfile','-NonInteractive','-EncodedCommand',encoded],
+            capture_output=True,timeout=120,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+    except subprocess.TimeoutExpired:
+        raise HTTPException(422,'Ожидание настройки Windows истекло. Проверьте запрос разрешения Windows и повторите настройку.')
+    except OSError:
+        raise HTTPException(422,'Не удалось запустить настройку Windows. Проверьте доступность PowerShell.')
+    if completed.returncode!=0:
+        raise HTTPException(422,'Windows не подтвердила настройку брандмауэра. Разрешите запрос администратора и повторите. Подробности: app\\backend\\firewall-error.log в папке Windows-Portable.')
+    return {'ok':True,'message':'Правило брандмауэра создано и проверено. Подключения разрешены в частной локальной сети. Вход в аккаунт сохранён.'}
