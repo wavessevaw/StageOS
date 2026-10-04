@@ -31,16 +31,16 @@ def build_context(s, question):
         query = query.where(Event.venue_id.in_([v.id for v in venues]))
     now = datetime.now()
     start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    if "завтра" in q:
+    if "завтра" in q or "tomorrow" in q:
         start += timedelta(days=1)
         query = query.where(
             Event.start >= start, Event.start < start + timedelta(days=1)
         )
-    elif "сегодня" in q:
+    elif "сегодня" in q or "today" in q:
         query = query.where(
             Event.start >= start, Event.start < start + timedelta(days=1)
         )
-    elif "недел" in q:
+    elif "недел" in q or "week" in q:
         start -= timedelta(days=start.weekday())
         query = query.where(
             Event.start >= start, Event.start < start + timedelta(days=7)
@@ -70,14 +70,14 @@ def build_context(s, question):
                 in ["Режиссёр", "Дирижёр", "Помреж", "Техдир", "Звук", "Свет", "Видео"]
                 or a["actual_id"] in [r.id for r in people]
             ]
-        if "конфликт" in q:
+        if "конфликт" in q or "conflict" in q:
             r = Request(
                 **{**ev.data["request"], "event_id": ev.id, "version": ev.version}
             )
             row["conflicts"] = preview(s, r)["conflicts"][:12]
         events.append(row)
     checks = []
-    if any(x in q for x in ["совместим", "почему", "штанкет", "софит"]):
+    if any(x in q for x in ["совместим", "почему", "штанкет", "софит", "compatible", "why", "fly bar", "lighting batten"]):
         for p in selected[:2]:
             for v in venues[:2]:
                 result = compatibility(s, p, v)

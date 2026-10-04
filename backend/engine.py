@@ -4,10 +4,11 @@ import hashlib, json
 from copy import deepcopy
 from collections import defaultdict
 from typing import Literal
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, StrictInt
 from sqlalchemy import select, delete
 from ortools.sat.python import cp_model
 from .models import Resource, Production, Event, Booking, Task, Audit
+from .production_editor import cast_people
 
 
 class TaskTiming(BaseModel):
@@ -22,8 +23,8 @@ class TaskTiming(BaseModel):
 
 
 class Request(BaseModel):
-    production_id: int
-    venue_id: int
+    production_id: StrictInt = Field(gt=0)
+    venue_id: StrictInt = Field(gt=0)
     start: datetime
     kind: Literal[
         "Спектакль",
@@ -36,17 +37,17 @@ class Request(BaseModel):
     ] = "Спектакль"
     cast: Literal["A", "B"] = "A"
     duration: int | None = Field(default=None, ge=15, le=480)
-    scenes: list[int] = Field(default_factory=list)
+    scenes: list[StrictInt] = Field(default_factory=list)
     adaptation: bool = True
-    replacements: dict[str, int] = Field(default_factory=dict)
-    equipment_kits: list[int] | None = None
+    replacements: dict[str, StrictInt] = Field(default_factory=dict)
+    equipment_kits: list[StrictInt] | None = None
     event_id: int | None = None
     version: int | None = None
     override_reason: str = ""
     force: bool = False
     notes: str = Field(default="", max_length=8000)
-    rehearsal_people: list[int] | None = None
-    rehearsal_items: list[int] = Field(default_factory=list)
+    rehearsal_people: list[StrictInt] | None = None
+    rehearsal_items: list[StrictInt] = Field(default_factory=list)
     run_through: bool = False
     task_overrides: dict[str, TaskTiming] = Field(default_factory=dict)
 
@@ -423,6 +424,14 @@ def preview(s, r: Request, production_data=None):
         v = Resource(id=v.id, name=v.name, kind="Room", data={**parent.data, **v.data})
     if production_data is not None:
         p = Production(id=p.id, name=p.name, version=p.version, data=deepcopy(production_data))
+    valid_replacements=set(p.data["responsibles"].values())
+    for role in p.data["roles"]:valid_replacements.add(role[r.cast])
+    for group in ["groups","crew"]:
+        for ids in cast_people(p.data,group,r.cast).values():valid_replacements.update(ids)
+    for ov in p.data.get("overrides",{}).values():valid_replacements.update(ov.get("orchestra",[]))
+    valid_replacements.update(r.rehearsal_people or [])
+    if any(not key.isdecimal() or int(key) not in valid_replacements for key in r.replacements):
+        raise ValueError("Замена ссылается на отсутствующую позицию состава")
     rehearsal = r.kind == "Репетиция"
     duration = (
         r.duration
@@ -476,17 +485,17 @@ def preview(s, r: Request, production_data=None):
             bookings[rid] = {"resource_id": rid, "start": a, "end": b, "label": label}
 
     def assign(rid, role, dept, a, b, eligible=None):
+        if not rid:
+            if rehearsal and r.rehearsal_people is not None:return
+            conflicts.append(issue("unassigned",role,"Не назначен исполнитель выбранного состава","ERROR"))
+            return
         actual = r.replacements.get(str(rid), rid)
         if rehearsal and r.rehearsal_people is not None and actual not in r.rehearsal_people:
             return
         person = resources.get(actual)
         if not person or person.kind != "Person":
             raise ValueError("Замена должна быть сотрудником")
-        allowed = (
-            actual in eligible
-            if eligible
-            else dept in person.data.get("qualification", [])
-        )
+        allowed = dept in person.data.get("qualification", []) and (eligible is None or actual in eligible)
         if not allowed:
             conflicts.append(
                 issue(
@@ -546,7 +555,7 @@ def preview(s, r: Request, production_data=None):
             end,
             role["eligible"],
         )
-    groupids = dict(p.data["groups"])
+    groupids = cast_people(p.data,"groups",r.cast)
     if comp["override"]:
         groupids["Оркестр"] = comp["override"]["orchestra"]
     if rehearsal and r.scenes:
@@ -583,7 +592,7 @@ def preview(s, r: Request, production_data=None):
         if item.kind=='Scenery' and (item.data.get('width',0)>v.data.get('width',0) or item.data.get('height',0)>v.data.get('height',0) or item.data.get('depth',0)>v.data.get('depth',0)):
             conflicts.append(issue('scenery',item.name,'Декорация не помещается на сцене','CRITICAL'))
     if not rehearsal:
-        for dept, ids in p.data["crew"].items():
+        for dept, ids in cast_people(p.data,"crew",r.cast).items():
             for rid in ids:
                 assign(rid, f"{dept} · техник", dept, first if dept == "Транспорт" else techstart, last if dept == "Транспорт" else techend)
         for kitid in (
@@ -908,6 +917,34 @@ def saved_event_plan(s, ev):
         old_codes={c['code'] for c in plan['compatibility']['conflicts']}
         conflicts=[c for c in conflicts if c['code'] not in old_codes]
         conflicts.extend(comp['conflicts']);plan['compatibility']=comp
+    # Recheck the committed bookings against today's passports, without reallocating.
+    if bs:
+        venue=resources[ev.venue_id]
+        site=resources.get(venue.data.get('venue_id')) if venue.kind=='Room' else venue
+        site_data={**(site.data if site else {}),**venue.data}
+        venue_booking=bs.get(ev.venue_id)
+        if venue_booking:
+            day=ev.start.replace(hour=0,minute=0)
+            conflicts=[c for c in conflicts if c['code'] not in ['setup','closing','room_capacity']]
+            if venue_booking['start']<day+timedelta(hours=site_data.get('opening',8)):
+                conflicts.append(issue('setup',venue.name,'Подготовка начинается до открытия площадки'))
+            if venue_booking['end']>day+timedelta(hours=site_data.get('closing',24)):
+                conflicts.append(issue('closing',venue.name,'Работы завершаются после закрытия площадки'))
+            if venue.kind=='Room' and len({a['actual_id'] for a in plan['assignments']})>site_data.get('capacity',0):
+                conflicts.append(issue('room_capacity',venue.name,'Участники не помещаются в помещении'))
+        conflicts=[c for c in conflicts if c['code'] not in ['qualification','bar_capacity','moving_bar_count']]
+        for a in plan['assignments']:
+            person=resources.get(a['actual_id'])
+            if not person or a['department'] not in person.data.get('qualification',[]):
+                conflicts.append(issue('qualification',a['actual'],'Нет действующей квалификации для '+a['role'],resource_id=a['actual_id']))
+        requirements=plan['compatibility'].get('requirements',{})
+        bars=[resources[rid] for rid in bs if resources[rid].kind=='Fly Bar']
+        for bar in bars:
+            if (bar.data.get('capacity',0)-bar.data.get('current_load',0)<requirements.get('bar_load',0)
+                    or not bar.data.get('scenery_allowed',False) or bar.data.get('venue_id')!=ev.venue_id):
+                conflicts.append(issue('bar_capacity',bar.name,'Назначенный штанкет больше не соответствует нагрузке или площадке','CRITICAL',resource_id=bar.id))
+        if sum(bool(b.data.get('movement')) for b in bars)<requirements.get('moving_fly_bars',0):
+            conflicts.append(issue('moving_bar_count',venue.name,'Назначенные штанкеты не обеспечивают нужное движение','CRITICAL'))
     plan['conflicts']=conflicts
     plan['status']='CONFLICT' if any(c['severity'] in ['ERROR','CRITICAL'] for c in conflicts) else 'WARNING' if conflicts else 'READY'
     plan['tasks']=[{'name':t.name,'department':t.department,'start':t.start.isoformat(),'end':t.end.isoformat()} for t in s.scalars(select(Task).where(Task.event_id==ev.id).order_by(Task.start))]

@@ -15,14 +15,16 @@ Run-Native $py @('-m','pytest','tests','-q')
 if ($Mode -eq 'Portable') {
     Run-Native $py @('-m','pip','install','ziglang==0.16.0')
     Run-Native $py @('scripts/fetch_windows_runtime.py')
-    Run-Native $py @('-m','ziglang','cc','-target','x86_64-windows-gnu','-municode','-Wl,--subsystem,windows','-O2','-s','windows/launcher.c','-o','windows/StageOS.exe')
+    Run-Native $py @('-m','ziglang','rc','/i','windows','/fo','windows/StageOS.res','windows/resources.rc')
+    Run-Native $py @('-m','ziglang','cc','-target','x86_64-windows-gnu','-municode','-Wl,--subsystem,windows','-O2','-s','windows/launcher.c','windows/StageOS.res','-o','windows/StageOS.exe')
+    Run-Native $py @('scripts/check_windows_icon.py')
     Run-Native $py @('scripts/assemble_windows_portable.py')
     Compress-Archive -Path 'artifacts/StageOS-Portable' -DestinationPath 'artifacts/StageOS-Portable.zip' -Force
     Write-Output 'Created artifacts/StageOS-Portable.zip'
     exit 0
 }
 
-Run-Native $py @('-m','PyInstaller','--noconfirm','--clean','--onefile','--name','stageos-backend','--collect-all','ortools','--collect-all','uvicorn','--collect-all','alembic','--hidden-import','sqlalchemy.dialects.sqlite','--add-data','frontend/dist;frontend/dist','--add-data','migrations;migrations','--paths','.','backend/launcher.py')
+Run-Native $py @('-m','PyInstaller','--noconfirm','--clean','--onefile','--name','stageos-backend','--collect-all','ortools','--collect-all','uvicorn','--collect-all','alembic','--hidden-import','sqlalchemy.dialects.sqlite','--add-data','backend/assets;backend/assets','--collect-all','reportlab','--collect-all','PIL','--add-data','frontend/dist;frontend/dist','--add-data','migrations;migrations','--paths','.','backend/launcher.py')
 New-Item -ItemType Directory -Force -Path 'src-tauri\binaries' | Out-Null
 Copy-Item 'dist\stageos-backend.exe' 'src-tauri\binaries\stageos-backend-x86_64-pc-windows-msvc.exe' -Force
 Run-Native 'npm.cmd' @('ci')

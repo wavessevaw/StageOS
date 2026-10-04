@@ -1,3 +1,4 @@
+import {getLanguage,tr,message} from "./i18n";
 const dictionary: Record<string, string> = {
   Preview: "Предварительный план",
   "Stage Assistant": "Помощник StageOS",
@@ -189,6 +190,10 @@ const words: Record<string, string> = {
 export function ru(value: any): string {
   if (value === null || value === undefined) return "—";
   const s = String(value);
+  if (getLanguage()==="en") {
+    if (dictionary[s]) return tr(dictionary[s])===dictionary[s] ? s.replaceAll("_"," ") : tr(dictionary[s]);
+    return message(s);
+  }
   if (dictionary[s]) return dictionary[s];
   let out = s;
   for (const [a, b] of Object.entries({ ...words, ...dictionary }).sort(

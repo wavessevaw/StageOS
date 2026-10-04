@@ -1,3 +1,4 @@
+import { tr } from "./i18n";
 import React, { useState } from "react";
 const defaults: Record<string, any> = {
   seats: 300,
@@ -62,18 +63,18 @@ export default function VenueEditor({
     [busy, setBusy] = useState(false);
   return (
     <section className="panel">
-      <h1>{d.id ? "Редактировать площадку" : "Добавить площадку"}</h1>
+      <h1>{tr(d.id ? "Редактировать площадку" : "Добавить площадку")}</h1>
       <label className="field">
-        <span>Название площадки</span>
+        <span>{tr("Название площадки")}</span>
         <input
           value={d.name || ""}
           onChange={(e) => setD({ ...d, name: e.target.value })}
         />
       </label>
       <div className="check-grid">
-        {Object.entries(defaults).map(([k, v]) => (
+        {tr(Object.entries(defaults).map(([k, v]) => (
           <label className="field" key={k}>
-            <span>{labels[k]}</span>
+            <span>{tr(labels[k])}</span>
             <input
               type={typeof v === "boolean" ? "checkbox" : "number"}
               min={0}
@@ -99,37 +100,31 @@ export default function VenueEditor({
                     [k]:
                       typeof v === "boolean"
                         ? e.target.checked
-                        : +e.target.value,
+                        : e.target.value === "" ? "" : +e.target.value,
                   },
                 })
               }
             />
           </label>
-        ))}
+        )))}
       </div>
-      <p className="muted">
-        Штанкеты, софиты и световые позиции создаются как отдельные ресурсы. При
-        уменьшении количества лишние позиции выводятся из эксплуатации; их
-        история сохраняется.
-      </p>
-      {error && <p role="alert">{error}</p>}
-      <button onClick={onCancel}>Отмена</button>
+      <p className="muted">{tr("Штанкеты, софиты и световые позиции создаются как отдельные ресурсы. При уменьшении количества лишние позиции выводятся из эксплуатации; их история сохраняется.")}</p>
+      {tr(error && <p role="alert">{tr(error)}</p>)}
+      <button onClick={onCancel}>{tr("Отмена")}</button>
       <button
         className="primary"
         disabled={busy}
         onClick={async () => {
           setBusy(true);
           try {
-            await onSave(d);
+            await onSave({...d,data:Object.fromEntries(Object.entries(d.data).map(([k,v])=>[k,v === "" && typeof defaults[k] === "number" ? 0 : v]))});
           } catch (e: any) {
             setError(e.message);
           } finally {
             setBusy(false);
           }
         }}
-      >
-        Сохранить площадку
-      </button>
+      >{tr("Сохранить площадку")}</button>
     </section>
   );
 }

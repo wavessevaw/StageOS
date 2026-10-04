@@ -4,12 +4,12 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/release.yml'
-      - 'docs/releases/1.0.0-rc.1.md'
+      - 'docs/releases/1.0.0.md'
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: stageos-release-v1.0.0-rc.1
+  group: stageos-release-v1.0.0
   cancel-in-progress: false
 jobs:
   verify:
@@ -27,6 +27,10 @@ jobs:
           python-version: '3.12'
       - uses: actions/download-artifact@v4
         with:
+          name: StageOS-Test-Results
+          path: .
+      - uses: actions/download-artifact@v4
+        with:
           name: StageOS-Windows-Portable
           path: downloaded
       - run: |
@@ -38,7 +42,7 @@ jobs:
           python scripts/prepare_release_report.py
           python scripts/package_release.py
           mkdir -p release-assets
-          cp ../StageOS-Release-1.0.0-rc.1.zip release-assets/
+          cp ../StageOS-Release-1.0.0.zip release-assets/
           cp README_RU.md ARCHITECTURE.md RELEASE_AUDIT_RU.md TEST_RESULTS.md BUILD_RESULTS.md GITHUB_RELEASE_BUILD.md release-assets/
           cd release-assets
           sha256sum * > SHA256SUMS.txt
@@ -46,15 +50,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          tag=v1.0.0-rc.1
+          tag=v1.0.0
           if gh release view "$tag" --json isDraft > /tmp/stageos-existing-release.json 2>/dev/null; then
             echo "Release already exists; refusing to replace published assets."
             exit 1
           fi
           gh release create "$tag" release-assets/* \
             --target "$GITHUB_SHA" \
-            --title "StageOS 1.0.0-rc.1 — театр, производство, календарь" \
-            --notes-file docs/releases/1.0.0-rc.1.md \
-            --prerelease --draft
+            --title "StageOS 1.0.0 — театр, производство, календарь" \
+            --notes-file docs/releases/1.0.0.md \
+            --draft
           gh release edit "$tag" --draft=false
           gh release view "$tag" --json url,assets,isDraft,isPrerelease

@@ -80,11 +80,11 @@ The optional assistant connects to an OpenAI-compatible endpoint, including loca
 4. Add your venues and employees, then create a production passport with casts, teams and individually tracked assets.
 5. Open Schedule, check the preview and confirm. The event and preparation chain appear in Calendar.
 
-The updated application adds **Russian / English switching** in the header and Settings, with a saved preference. This change is being verified for the next build; the published RC1 package predates it. User-entered production names, people and notes keep their original language.
+Switch **Russian / English** in the header. Your preference is stored in the database and restored on restart. User-entered production names, people and notes keep their original language.
 
 ## Release status
 
-The published release is **1.0.0-rc.1**, a release candidate. Preparation for 1.0.0 and the next candidate is tracked in [PR #2](https://github.com/wavessevaw/StageOS/pull/2). The updated icon and language switch will be included in a subsequent verified Windows package.
+**Version 1.0.0** adds incomplete passports, independent department casts, a new native icon, persisted language selection, and offline PDF/PNG schedule export. The working package starts with an empty database. Publication is gated by [backend, browser UI and Windows checks](https://github.com/wavessevaw/StageOS/actions/workflows/release.yml); exact results and limitations are included in the release archive. Back up your database before updating.
 
 <details>
 <summary>Verification and current limits</summary>
@@ -106,3 +106,10 @@ A successful Windows Server CI run does not establish complete manual acceptance
 React and TypeScript power the interface. FastAPI, SQLAlchemy, Alembic and SQLite manage local data. Google OR-Tools CP-SAT calculates production constraints. The LLM is an optional interface layer, not the scheduling source of truth.
 
 **StageOS — give every performance a plan the whole team can follow.**
+
+
+## Share a schedule with your team
+
+Open Calendar → **Export schedule**. Choose up to 31 days, current filters, staff calls, production stages and notes. The matrix groups dates, venues and rooms. PDF is ready for printing; PNG is convenient for sharing. Multiple PNG pages download as a ZIP.
+
+Database backup/export is separate: Settings → Download backup. Restore with Open existing database. A failed import leaves the active database unchanged; a successful import creates a managed copy and persists the selection for future launches.

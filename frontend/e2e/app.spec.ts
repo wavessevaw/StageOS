@@ -236,6 +236,7 @@ test.describe("StageOS integration", () => {
     await page.getByRole("button", { name: "Сотрудники", exact: true }).click();
     await page.getByRole("button", { name: "Добавить сотрудника" }).click();
     await page.getByLabel("Название / ФИО").fill("Тестовый сотрудник");
+    await page.getByLabel("Подразделение",{exact:true}).fill("Звук");
     await page.getByRole("button", { name: "Сохранить ресурс" }).click();
     await page.getByPlaceholder("Найти ресурс").fill("Тестовый сотрудник");
     await page.locator(".resource-card").click();

@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "StageOS",
-  "version": "0.2.0",
-  "identifier": "local.stageos.demo",
+  "version": "1.0.0",
+  "identifier": "local.stageos.desktop",
   "build": {
     "frontendDist": "../frontend/dist"
   },

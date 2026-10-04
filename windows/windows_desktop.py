@@ -33,7 +33,12 @@ def self_test():
                 p=Production(name='Проверка постановки',data=validate_production(s,data));s.add(p);s.flush()
                 r=Request(production_id=p.id,venue_id=venue.id,start=datetime(2026,12,1,18))
                 plan=preview(s,r);assert plan['status']=='READY';ev=save_plan(s,r,plan)
-                return {'status':'PASS','python':sys.version,'platform':sys.platform,'solver':plan['solver']['status'],'empty_database':'PASS','event_saved':ev.id,'desktop_gui':'NOT_TESTED'}
+                from backend.schedule_export import build_pages,export
+                from datetime import date
+                pages=build_pages([],[],[],date(2026,12,1),date(2026,12,1))
+                assert export(pages,'pdf')[0].startswith(b'%PDF-')
+                assert export(pages,'png')[0].startswith(b'\x89PNG')
+                return {'status':'PASS','python':sys.version,'platform':sys.platform,'solver':plan['solver']['status'],'empty_database':'PASS','event_saved':ev.id,'desktop_gui':'NOT_TESTED','pdf_export':'PASS','png_export':'PASS'}
         finally:
             engine.dispose()
 
@@ -50,14 +55,9 @@ def main():
 
     # Native WinForms/WebView2 host. Pythonnet loads the .NET Framework shipped with Windows.
     import webview
+    import ctypes
+    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("StageOS.Desktop")
 
-    preference = HOME / "database-choice.json"
-    if preference.exists():
-        chosen = json.loads(preference.read_text(encoding="utf-8")).get("path")
-        if chosen and Path(chosen).is_file():
-            os.environ["STAGEOS_DATABASE_URL"] = "sqlite:///" + chosen.replace(
-                "\\", "/"
-            )
     app = create_app(demo_enabled=False)
     listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     listener.bind(("127.0.0.1", 0))
@@ -94,9 +94,31 @@ def main():
         min_size=(1000, 700),
         background_color="#f6f7f5",
     )
+    gui_test = "--gui-test" in sys.argv
+    gui_result = {}
+    def verify_window():
+        try:
+            if not window.events.loaded.wait(45):
+                raise RuntimeError("Окно не загрузилось за 45 секунд")
+            deadline=time.monotonic()+30
+            while time.monotonic()<deadline:
+                if window.evaluate_js("document.body.innerText.includes('Создать рабочую базу')"):break
+                time.sleep(0.1)
+            else:raise RuntimeError("Стартовый интерфейс не появился")
+            assert window.evaluate_js("Boolean(sessionStorage.getItem('stageos-token'))")
+            assert window.evaluate_js("location.search === ''")
+            assert window.native.Icon is not None
+            gui_result.update(status="PASS",window="WebView2",react="PASS",token="PASS",icon="PASS",platform=sys.platform)
+        except Exception:
+            gui_result.update(status="FAILED",traceback=traceback.format_exc())
+        finally:
+            (HOME / "gui-selftest.json").write_text(json.dumps(gui_result,ensure_ascii=False,indent=2),encoding="utf-8")
+            window.destroy()
     try:
         webview.start(
+            func=verify_window if gui_test else None,
             gui="edgechromium",
+            icon=str(ROOT.parent / "StageOS.ico"),
             debug=False,
             private_mode=False,
             storage_path=str(HOME / "WebView2"),
@@ -105,6 +127,8 @@ def main():
         server.should_exit = True
         thread.join(timeout=5)
         listener.close()
+    if gui_test and (gui_result.get("status")!="PASS" or thread.is_alive()):
+        raise RuntimeError("Проверка окна или завершения сервера не пройдена")
 
 
 if __name__ == "__main__":
@@ -113,7 +137,7 @@ if __name__ == "__main__":
     except Exception:
         trace = traceback.format_exc()
         (HOME / "startup-error.log").write_text(trace, encoding="utf-8")
-        if "--self-test" in sys.argv:
+        if "--self-test" in sys.argv or "--gui-test" in sys.argv:
             (HOME / "selftest.json").write_text(
                 json.dumps({"status": "FAILED", "traceback": trace}, indent=2),
                 encoding="utf-8",
