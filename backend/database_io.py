@@ -2,6 +2,7 @@
 
 import sqlite3, uuid, json
 from pathlib import Path
+from contextlib import closing
 
 REQUIRED = {
     "resources",
@@ -16,7 +17,7 @@ REQUIRED = {
 
 
 def validate_database(path):
-    with sqlite3.connect(f"file:{Path(path).as_posix()}?mode=ro", uri=True) as db:
+    with closing(sqlite3.connect(f"file:{Path(path).as_posix()}?mode=ro", uri=True)) as db:
         if db.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
             raise ValueError("База SQLite повреждена")
         tables = {
@@ -50,7 +51,7 @@ def import_database(content: bytes, directory: Path):
 
 
 def backup_database(source: Path, target: Path):
-    with sqlite3.connect(str(source)) as src, sqlite3.connect(str(target)) as dst:
+    with closing(sqlite3.connect(str(source))) as src, closing(sqlite3.connect(str(target))) as dst:
         src.backup(dst)
     validate_database(target)
 

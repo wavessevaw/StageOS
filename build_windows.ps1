@@ -17,6 +17,7 @@ if ($Mode -eq 'Portable') {
     Run-Native $py @('scripts/fetch_windows_runtime.py')
     Run-Native $py @('-m','ziglang','rc','/i','windows','/fo','windows/StageOS.res','windows/resources.rc')
     Run-Native $py @('-m','ziglang','cc','-target','x86_64-windows-gnu','-municode','-Wl,--subsystem,windows','-O2','-s','windows/launcher.c','windows/StageOS.res','-o','windows/StageOS.exe')
+    Run-Native $py @('scripts/check_windows_icon.py')
     Run-Native $py @('scripts/assemble_windows_portable.py')
     Compress-Archive -Path 'artifacts/StageOS-Portable' -DestinationPath 'artifacts/StageOS-Portable.zip' -Force
     Write-Output 'Created artifacts/StageOS-Portable.zip'

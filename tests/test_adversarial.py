@@ -112,3 +112,22 @@ def test_snapshot_references_cannot_be_deleted_when_passport_changes(clean):
     assert c.patch('/api/productions/'+str(p['id']),json=p).status_code==200
     assert c.post('/api/events/'+str(ev['id'])+'/status',json={'status':'Cancelled','version':ev['version']}).status_code==200
     assert c.delete('/api/resources/'+str(item['id'])).status_code==409
+
+
+def test_export_closes_every_sqlite_connection_before_removing_file(clean,monkeypatch):
+    c,S=clean;v,person,p,r=setup_clean(c);confirm(c,r)
+    connections=[]
+    connect=sqlite3.connect
+    class Tracked(sqlite3.Connection):
+        closed=False
+        def close(self):
+            self.closed=True
+            super().close()
+    def opened(*args,**kwargs):
+        conn=connect(*args,**kwargs,factory=Tracked)
+        connections.append(conn)
+        return conn
+    monkeypatch.setattr(sqlite3,'connect',opened)
+    response=c.get('/api/database/export')
+    assert response.status_code==200
+    assert len(connections)>=3 and all(conn.closed for conn in connections)
