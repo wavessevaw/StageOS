@@ -80,7 +80,7 @@ The optional assistant connects to an OpenAI-compatible endpoint, including loca
 
 1. Download the Windows Portable archive from [Releases](https://github.com/wavessevaw/StageOS/releases) and extract it completely.
 2. Run `StageOS.exe`. Microsoft Edge WebView2 Runtime is required.
-3. Create a working database for your theatre. Release packages start empty, with no demo repertoire, employees or equipment.
+3. Choose an existing theatre or create one with its administrator account, then sign in. For shared access, follow the [StageOS Server setup guide](docs/SERVER_SETUP_RU.md). Release packages start empty, with no demo repertoire, employees or equipment.
 4. Add your venues and employees, then create a production passport with casts, teams and individually tracked assets.
 5. Open Schedule, check the preview and confirm. The event and preparation chain appear in Calendar.
 
@@ -88,7 +88,7 @@ Switch **Russian / English** in the header. Your preference is stored in the dat
 
 ## Release status
 
-**Version 1.0.2** adds incomplete passports, independent department casts, a new native icon, persisted language selection, and offline PDF/PNG schedule export. The working package starts with an empty database. Publication is gated by [backend, browser UI and Windows checks](https://github.com/wavessevaw/StageOS/actions/workflows/release.yml); exact results and limitations are included in the release archive. Back up your database before updating.
+**Version 1.0.4** adds StageOS Server on your PC, a shared database for multiple desktops, connection codes, personal accounts, automatic refresh and stale-plan protection. Incomplete passports, independent department casts and PDF/PNG exports remain available. The working package starts with an empty database. Publication is gated by [backend, browser UI and Windows checks](https://github.com/wavessevaw/StageOS/actions/workflows/release.yml); exact results and limitations are included in the release archive. Back up your database before updating.
 
 <details>
 <summary>Verification and current limits</summary>
