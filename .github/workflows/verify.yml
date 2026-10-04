@@ -9,6 +9,9 @@ permissions:
   contents: read
 jobs:
   core-and-ui:
+    defaults:
+      run:
+        shell: bash
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:

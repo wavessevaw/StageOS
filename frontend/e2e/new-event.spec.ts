@@ -30,8 +30,8 @@ for(const [index,status] of ['Cancelled','Completed','In Progress'].entries()){
   await modal.getByRole('button',{name:'Подтвердить',exact:true}).click();
   expect((await sent).postDataJSON().request.event_id).toBeNull();
   await expect(modal).not.toBeVisible();
-  const saved=(await(await request.get('/api/events')).json()).filter((e:any)=>e.start.startsWith(newDate));
+  const saved=(await(await request.get('/api/events',{maxRetries:2})).json()).filter((e:any)=>e.start.startsWith(newDate));
   expect(saved).toHaveLength(1);expect(saved[0].id).not.toBe(old.id);expect(saved[0].data.request.notes).toBe('');
-  const original=await(await request.get(`/api/events/${old.id}`)).json();expect(original.status).toBe(status);expect(original.version).toBe(old.version);
+  const original=await(await request.get(`/api/events/${old.id}`,{maxRetries:2})).json();expect(original.status).toBe(status);expect(original.version).toBe(old.version);
  });
 }
