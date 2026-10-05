@@ -513,8 +513,10 @@ def create_app(engine=None, static_dir=None, demo_enabled=None):
             bookings = s.scalars(select(Booking).where(Booking.resource_id == rid)).all()
             scheduled = [b for b in bookings if b.event_id is not None]
             event_ids = {b.event_id for b in scheduled}
-            events = [s.get(Event, eid) for eid in event_ids]
-            return {"events":len(events), "hours":round(sum((b.end-b.start).total_seconds()/3600 for b in scheduled),1),
+            events = [e for eid in event_ids if (e := s.get(Event, eid)) and e.status != 'Cancelled']
+            from .workload import employee_workload
+            workload, _ = employee_workload({rid: person}, scheduled, {e.id: e for e in events})
+            return {"events":len(events), "hours":round(workload.get(rid, 0),1),
                     "performances":sum(e.kind=="Спектакль" for e in events), "rehearsals":sum(e.kind=="Репетиция" for e in events),
                     "absences":sum(b.event_id is None for b in bookings),
                     "replacements":sum(any(a['actual_id']==rid and a['responsible_id']!=rid for a in e.data['plan']['assignments']) for e in events)}
@@ -897,14 +899,10 @@ def create_app(engine=None, static_dir=None, demo_enabled=None):
     def analytics():
         with Session() as s:
             rs = {x.id: x for x in s.scalars(select(Resource))}
-            hours = {}
-            departments = {}
-            for b in s.scalars(select(Booking).where(Booking.event_id != None)):
-                h = (b.end - b.start).total_seconds() / 3600
-                r = rs[b.resource_id]
-                if r.kind != "Person": continue
-                hours[r.id] = hours.get(r.id, 0) + h
-                departments[r.department] = departments.get(r.department, 0) + h
+            from .workload import employee_workload
+            events = {e.id: e for e in s.scalars(select(Event))}
+            hours, department_stats = employee_workload(rs, s.scalars(select(Booking)), events)
+            departments = {name: data['average_hours'] for name, data in department_stats.items()}
             tasks = s.scalars(select(Task).where(Task.actual_end != None)).all()
             evs = s.scalars(select(Event).where(Event.status != "Cancelled")).all()
             return {
@@ -918,6 +916,8 @@ def create_app(engine=None, static_dir=None, demo_enabled=None):
                     for rid, h in sorted(hours.items(), key=lambda x: -x[1])
                 ],
                 "departments": departments,
+                "department_stats": department_stats,
+                "period": "all_calendar",
                 "events": len(evs),
                 "adaptations": sum(
                     bool(e.data["plan"]["compatibility"]["override"]) for e in evs

@@ -5,7 +5,9 @@ from ortools.sat.python import cp_model
 DEPS = {
     'Выезд':['Погрузка'], 'Разгрузка':['Выезд'],
     **{x:['Разгрузка'] for x in ['Монтаж сцены','Световой монтаж','Звуковой монтаж','Видеомонтаж']},
-    'RF check':['Звуковой монтаж'], 'Orchestra setup':['Монтаж сцены'],
+    # The orchestra zone can be prepared alongside stage installation.
+    # The common technical check still waits for both departments.
+    'RF check':['Звуковой монтаж'], 'Orchestra setup':['Разгрузка'],
     'Technical Check':['Монтаж сцены','Световой монтаж','RF check','Видеомонтаж','Orchestra setup'],
     'Готовность':['Technical Check'], 'Прогон':['Готовность'], 'Обед':['Прогон'],
     'Сбор перед спектаклем':['Обед'], 'Спектакль':['Готовность','Сбор перед спектаклем'],
@@ -21,6 +23,9 @@ def retime(tasks, overrides, start, run_through=False, dependencies=None):
         raise ValueError('Неизвестный этап производственного плана')
     model=cp_model.CpModel(); starts={}; ends={}; intervals={}; penalties=[]
     baseline={t['name']:int((t['start']-origin).total_seconds()/60) for t in tasks}
+    durations = {t['name']: overrides[t['name']].duration
+                 if t['name'] in overrides and overrides[t['name']].duration is not None
+                 else int((t['end']-t['start']).total_seconds()/60) for t in tasks}
     # A single edited anchor shifts the preferred times of its successors, not the performance.
     preferred=dict(baseline)
     for name, edit in overrides.items():
@@ -34,9 +39,26 @@ def retime(tasks, overrides, start, run_through=False, dependencies=None):
             ancestors.update(d for n in list(ancestors) if n not in boundaries for d in deps.get(n,[]) if d in names and d not in boundaries)
         for n in (descendants | ancestors) - boundaries:
             preferred[n]=baseline[n]+delta
+    # Recalculate upstream preferences using the edited durations. Translating
+    # the old baseline alone leaves an obsolete 05:00 arrival after shortening
+    # a five-hour setup to one hour with a fixed 09:00 start.
+    upstream_times = {}
+    def place_before(name, when):
+        for dep in deps.get(name, []):
+            if dep not in names or dep in {'Спектакль', 'Репетиция', 'Прогон'}:
+                continue
+            desired = when - durations[dep] - (10 if name == 'Демонтаж' else 0)
+            if dep in upstream_times and upstream_times[dep] <= desired:
+                continue
+            upstream_times[dep] = desired
+            place_before(dep, desired)
+    for name, edit in overrides.items():
+        if edit.start is not None:
+            place_before(name, int((edit.start-origin).total_seconds()/60))
+    preferred.update(upstream_times)
     for t in tasks:
         n=t['name']; edit=overrides.get(n)
-        dur=edit.duration if edit and edit.duration is not None else int((t['end']-t['start']).total_seconds()/60)
+        dur=durations[n]
         a=model.new_int_var(0,4320,n); b=model.new_int_var(0,4320,n+'_end')
         starts[n]=a; ends[n]=b; intervals[n]=model.new_interval_var(a,dur,b,n)
         if n in ['Спектакль','Репетиция']:
@@ -66,7 +88,8 @@ def customize(tasks,removed,extra):
     if gone-original:raise ValueError('Неизвестный удаляемый этап')
     if gone & {'Спектакль','Репетиция'}:raise ValueError('Основное событие нельзя удалить из производственного плана')
     added=[t.name for t in extra]
-    if len(set(added))!=len(added) or set(added)&(original|set(DEPS)):
+    # Lunch may also be added explicitly to a plan without a run-through.
+    if len(set(added))!=len(added) or set(added)&(original|(set(DEPS)-{'Обед'})):
         raise ValueError('Названия дополнительных этапов должны быть уникальны. Удалённый стандартный этап можно восстановить.')
     names=(original-gone)|set(added)
     def upstream(name,seen=None):

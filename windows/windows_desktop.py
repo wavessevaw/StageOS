@@ -125,6 +125,8 @@ def main():
     else:
         raise RuntimeError("Локальный сервер не запустился за 30 секунд")
     url = f"http://127.0.0.1:{port}/?token=" + os.environ["STAGEOS_TOKEN"]
+    from desktop_files import DesktopFiles
+    files = DesktopFiles(f"http://127.0.0.1:{port}")
     window = webview.create_window(
         "StageOS — управление театральным производством",
         url,
@@ -132,7 +134,9 @@ def main():
         height=940,
         min_size=(1000, 700),
         background_color="#f6f7f5",
+        js_api=files,
     )
+    files._window = window
     gui_test = "--gui-test" in sys.argv
     gui_result = {}
     def verify_window():

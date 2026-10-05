@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { tr } from "./i18n";
+import { ru } from "./ru";
 type Obj = Record<string, any>;
 type Api = (path: string, method?: string, body?: any) => Promise<any>;
 export function HistorySuggestions({
@@ -61,6 +62,7 @@ export function HistorySuggestions({
             {result.suggestions.map((s: Obj) => (
               <div key={s.id}>
                 <strong>
+                  {tr(s.scope === "organization" ? "Организационный план" : "План и состав")} · {" "}
                   {s.count} / {result.samples} · {Math.round(s.share * 100)}%
                 </strong>
                 <p>
@@ -68,6 +70,12 @@ export function HistorySuggestions({
                     .map((r: Obj) => r.role + ": " + r.person)
                     .join(" · ")}
                 </p>
+                <details>
+                  <summary>{tr("Этапы предложенного плана")}</summary>
+                  {s.stages.map((t: Obj) => (
+                    <p key={t.name}>{String(t.start).slice(11, 16)}–{String(t.end).slice(11, 16)} · {ru(t.name)}</p>
+                  ))}
+                </details>
                 <small>
                   {tr("Этапов")}: {s.stages.length} · {tr("Конфликтов")}:{" "}
                   {s.conflicts}

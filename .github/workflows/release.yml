@@ -59,7 +59,7 @@ jobs:
           fi
           gh release create "$tag" release-assets/* \
             --target "$GITHUB_SHA" \
-            --title "StageOS $version — гибкий план, состав события и StageOS Server" \
+            --title "StageOS $version — утренний план, понятный экспорт и точная нагрузка" \
             --notes-file "docs/releases/$version.md" \
             --draft
           gh release edit "$tag" --draft=false

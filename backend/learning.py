@@ -57,6 +57,41 @@ def restore(data, start):
     return data
 
 
+def organizational_pattern(event):
+    """Learn preparation independently of performers and curtain time.
+
+    Explicit preparation anchors are local clock times on an event-relative
+    day. Thus a repeated 09:00 orchestra call stays at 09:00 when the next
+    performance starts at 18:00 instead of 19:00. Cast choices are never
+    copied by an organizational suggestion.
+    """
+    data = {k: deepcopy(event.data["request"].get(k, default)) for k, default in (
+        ("removed_tasks", []), ("extra_tasks", []),
+        ("task_overrides", {}), ("run_through", False),
+    )}
+    data["removed_tasks"] = sorted(data["removed_tasks"])
+    def clock(edit):
+        if edit.get("start"):
+            when = datetime.fromisoformat(edit.pop("start"))
+            edit["day_offset"] = (when.date() - event.start.date()).days
+            edit["minute_of_day"] = when.hour * 60 + when.minute
+        return {k: v for k, v in edit.items() if v is not None}
+    data["task_overrides"] = {name: clock(edit) for name, edit in data["task_overrides"].items()}
+    data["extra_tasks"] = sorted((clock(edit) for edit in data["extra_tasks"]), key=lambda t: t["name"])
+    return data
+
+
+def restore_organization(data, start):
+    data = deepcopy(data)
+    midnight = start.replace(hour=0, minute=0, second=0, microsecond=0)
+    for edit in list(data["task_overrides"].values()) + data["extra_tasks"]:
+        if "minute_of_day" in edit:
+            edit["start"] = (midnight + timedelta(
+                days=edit.pop("day_offset"), minutes=edit.pop("minute_of_day")
+            )).isoformat()
+    return data
+
+
 def suggest(session, request):
     setting = session.get(Setting, "learning")
     if setting and not setting.value.get("enabled", True):
@@ -85,16 +120,19 @@ def suggest(session, request):
     buckets = {}
     counts = Counter()
     for event in events:
-        data = pattern(event)
-        key = json.dumps(data, sort_keys=True, ensure_ascii=False)
-        counts[key] += 1
-        buckets.setdefault(key, []).append(event)
+        for scope, data in (("organization", organizational_pattern(event)), ("complete", pattern(event))):
+            key = json.dumps({"scope": scope, "data": data}, sort_keys=True, ensure_ascii=False)
+            counts[key] += 1
+            buckets.setdefault(key, []).append(event)
     suggestions = []
     current = request.model_dump(mode="json")
-    for key, count in counts.most_common(3):
+    seen = set()
+    for key, count in counts.most_common(12):
         if count < 2:
             continue
-        changes = restore(json.loads(key), request.start)
+        template = json.loads(key)
+        scope = template["scope"]
+        changes = (restore_organization if scope == "organization" else restore)(template["data"], request.start)
         if all(current.get(k) == v for k, v in changes.items()):
             continue
         # Do not inherit event IDs, forced exceptions, notes or approval reasons.
@@ -102,13 +140,18 @@ def suggest(session, request):
             candidate = Request.model_validate(
                 {**current, **changes, "force": False, "override_reason": ""}
             )
+            candidate_key = candidate.model_dump_json()
+            if candidate_key in seen:
+                continue
             plan = preview(session, candidate)
         except ValueError:
             continue
         suggestion_id = hashlib.sha256(key.encode()).hexdigest()[:16]
+        seen.add(candidate_key)
         suggestions.append(
             dict(
                 id=suggestion_id,
+                scope=scope,
                 count=count,
                 share=round(count / len(events), 2),
                 dates=[e.start.isoformat() for e in buckets[key][:3]],
@@ -127,11 +170,13 @@ def suggest(session, request):
                 ],
             )
         )
+        if len(suggestions) == 3:
+            break
     return dict(
         enabled=True,
         samples=len(events),
         suggestions=suggestions,
-        method="confirmed-history-frequency-v1",
+        method="confirmed-history-frequency-v2",
     )
 
 

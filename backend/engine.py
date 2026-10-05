@@ -250,7 +250,7 @@ def pipeline(p, v, start, duration, rehearsal=False):
         ("Звуковой монтаж", "Звук", d["sound"], ["Разгрузка"]),
         ("Видеомонтаж", "Видео", d["video"], ["Разгрузка"]),
         ("RF check", "Звук", d["rf"], ["Звуковой монтаж"]),
-        ("Orchestra setup", "Оркестр", d["orchestra"], ["Монтаж сцены"]),
+        ("Orchestra setup", "Оркестр", d["orchestra"], ["Разгрузка"]),
         (
             "Technical Check",
             "Все",
@@ -328,7 +328,7 @@ def pipeline(p, v, start, duration, rehearsal=False):
     }
 
 
-def availability(s, resources, bookings, venue_id, event_id=None):
+def availability(s, resources, bookings, venue_id, event_id=None, meal_breaks=()):
     first = min(b["start"] for b in bookings.values())
     last = max(b["end"] for b in bookings.values())
     horizon = timedelta(minutes=max([240] + [x.data.get("travel",0) for x in resources.values() if x.kind == "Venue"]))
@@ -422,6 +422,9 @@ def availability(s, resources, bookings, venue_id, event_id=None):
         if (
             resources[rid].kind == "Person"
             and (b["end"] - b["start"]).total_seconds() > 12 * 3600
+            # This warning describes an uninterrupted shift. A real lunch
+            # interval inside this person's call window interrupts it.
+            and not any(b["start"] < a < z < b["end"] for a, z in meal_breaks)
         ):
             conflicts.append(
                 issue(
@@ -601,11 +604,14 @@ def preview(s, r: Request, production_data=None):
                 and x.department == dept
                 and x.data.get("specialization", x.department) == spec
             ]
+            call = performance_call - timedelta(minutes=15 if rehearsal else 60)
+            if dept == "Оркестр" and not rehearsal:
+                call = min([call] + [t["start"] for t in tasks if t["name"] == "Orchestra setup"])
             assign(
                 rid,
                 spec,
                 dept,
-                performance_call - timedelta(minutes=15 if rehearsal else 60),
+                call,
                 end,
                 eligible,
             )
@@ -738,7 +744,8 @@ def preview(s, r: Request, production_data=None):
         "orchestra", 0
     ):
         conflicts.append(issue("orchestra_missing", p.name, "Оркестр не укомплектован"))
-    conflicts.extend(availability(s, resources, bookings, v.id, r.event_id))
+    meals = [(t['start'], t['end']) for t in tasks if t['name'] == 'Обед']
+    conflicts.extend(availability(s, resources, bookings, v.id, r.event_id, meals))
     if not assignments and r.kind != "Монтаж":
         conflicts.append(issue("empty_people",p.name,"В постановке или репетиции не назначены участники"))
     status = (
@@ -952,7 +959,8 @@ def saved_event_plan(s, ev):
     bs = {b.resource_id:dict(resource_id=b.resource_id,start=b.start,end=b.end,label=b.label) for b in stored}
     dynamic = {'overlap','travel','resource_status','limited_use','long_shift','absence','maintenance','vacation','sick','training','unavailable'}
     conflicts = [c for c in plan['conflicts'] if c['code'] not in dynamic and 'busy' not in c]
-    if bs: conflicts.extend(availability(s,resources,bs,ev.venue_id,ev.id))
+    meals = [(datetime.fromisoformat(t['start']), datetime.fromisoformat(t['end'])) for t in plan['tasks'] if t['name'] == 'Обед']
+    if bs: conflicts.extend(availability(s,resources,bs,ev.venue_id,ev.id,meals))
     snapshot = plan.get('production_snapshot')
     current = s.get(Production,ev.production_id)
     plan['passport_changed'] = bool(snapshot and snapshot != current.data)

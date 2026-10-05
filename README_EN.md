@@ -1,3 +1,5 @@
+**New in 1.0.6:** morning orchestra setup alongside stage work, lunch-aware checks, preparation suggestions after two repetitions, explicit export destinations and accurate employee workload. [Release notes](docs/releases/1.0.6.md).
+
 **New in 1.0.5:** edit production stages, mix actors per role for one event, and review suggestions learned from confirmed theatre history. Live server diagnostics and automatic Windows network setup are included. [Release notes](docs/releases/1.0.5.md).
 
 **StageOS Server 1.0.5:** host your theatre database on your PC and connect staff desktops with an address, connection code and personal accounts. [Setup guide (Russian)](docs/SERVER_SETUP_RU.md).

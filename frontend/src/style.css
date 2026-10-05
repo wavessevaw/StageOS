@@ -1046,6 +1046,7 @@ details > form {
 }
 .chart-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 12px;
   margin: 18px 0;
@@ -1053,6 +1054,11 @@ details > form {
 }
 .chart-row > span {
   width: 90px;
+}
+.chart-row > small {
+  flex-basis: 100%;
+  color: var(--muted);
+  font-size: 11px;
 }
 .chart-row > div {
   flex: 1;

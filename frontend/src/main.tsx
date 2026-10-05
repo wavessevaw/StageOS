@@ -1,4 +1,5 @@
 import {HistorySuggestions,SmallModelSettings} from './Suggestions';
+import {saveFile} from './saveFile';
 import {EventRoles,AddStage,removeStage} from './EventPlanEditor';
 import { tr, useLanguage, setLanguage, getLanguage, Language } from "./i18n";
 import React, { useState, useEffect, useRef } from "react";
@@ -407,12 +408,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
         },
       });
       if (!res.ok) throw new Error("Не удалось создать резервную копию");
-      const url = URL.createObjectURL(await res.blob());
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = "StageOS-backup.db";
-      link.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setToast(await saveFile(await res.blob(), "StageOS-backup.db"));
     });
   }
   async function analyze(req = form) {
@@ -2339,7 +2335,8 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
                 </div>
                 <div className="two-col">
                   <section className="panel">
-                    <h3>{tr("Занятость подразделений · ресурс-часы")}</h3>
+                    <h3>{tr("Средняя нагрузка подразделений · часов на сотрудника")}</h3>
+                    <p className="muted">{tr("Всё расписание. Пересечения одного сотрудника не суммируются; обед и отменённые события исключены.")}</p>
                     {tr(Object.entries(analytics.departments)
                       .filter(([k]) => k)
                       .map(([k, v]: any) => (
@@ -2359,7 +2356,10 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
                               }}
                             />
                           </div>
-                          <b>{tr(Math.round(v))}</b>
+                          <b>{tr(v)}{tr(" ч")}</b>
+                          {analytics.department_stats?.[k] && <small>
+                            {tr("Сотрудников:")} {analytics.department_stats[k].people} · {tr("Всего человеко-часов:")} {analytics.department_stats[k].person_hours}
+                          </small>}
                         </div>
                       )))}
                   </section>
