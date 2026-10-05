@@ -998,11 +998,24 @@ def create_app(engine=None, static_dir=None, demo_enabled=None):
                 response = await client.get(cfg["endpoint"].rstrip("/") + "/models")
                 response.raise_for_status()
                 models = [m["id"] for m in response.json().get("data", [])]
+            if cfg['model'] not in models:
+                return {'status': 'Model unavailable', 'models': models, 'selected_model_available': False}
+            from .model_client import request_model, structured_content
+            raw = await request_model(cfg, [
+                {'role': 'system', 'content': 'Верни только JSON {"answer":"Модель готова"}. /no_think'},
+                {'role': 'user', 'content': 'Проверка ответа модели'},
+            ], httpx.AsyncClient, max_tokens=128)
+            answer = structured_content(raw, allow_text=True)
+            if not isinstance(answer.get('answer'), str) or not answer['answer'].strip():
+                raise ValueError('Модель не вернула текст ответа')
             return {
                 "status": "Connected",
                 "models": models,
                 "selected_model_available": cfg["model"] in models,
+                "generation": "PASS",
             }
+        except ValueError as exc:
+            raise HTTPException(502, str(exc))
         except Exception as exc:
             raise HTTPException(502, "Local AI не отвечает: " + type(exc).__name__)
 
@@ -1060,23 +1073,12 @@ def create_app(engine=None, static_dir=None, demo_enabled=None):
         if q.language=="en":
             prompt='You are StageOS Assistant. Answer in English using only the supplied database context. Admit missing information. To propose an event return JSON {"command":{"production_id":int,"venue_id":int,"start":"YYYY-MM-DDTHH:MM:SS","cast":"A or B","kind":"Спектакль or Репетиция"}}. Preserve the Russian kind values exactly. Never claim an event was saved. Otherwise return {"answer":"text"}. Data: '+json.dumps(data,ensure_ascii=False)
         try:
-            async with httpx.AsyncClient(timeout=90, trust_env=False) as client:
-                res = await client.post(
-                    cfg["endpoint"].rstrip("/") + "/chat/completions",
-                    json={
-                        "model": cfg["model"],
-                        "messages": [
-                            {"role": "system", "content": prompt},
-                            {"role": "user", "content": q.text},
-                        ],
-                        "temperature": 0,
-                    },
-                )
-                res.raise_for_status()
-                content = res.json()["choices"][0]["message"]["content"]
-                out = json.loads(
-                    content.removeprefix("```json").removesuffix("```").strip()
-                )
+            from .model_client import request_model, structured_content
+            content = await request_model(cfg, [
+                {"role": "system", "content": prompt + ' /no_think'},
+                {"role": "user", "content": q.text},
+            ], httpx.AsyncClient)
+            out = structured_content(content, allow_text=True)
             if "command" in out:
                 req = Request.model_validate(out["command"])
                 with Session() as s:
@@ -1084,7 +1086,11 @@ def create_app(engine=None, static_dir=None, demo_enabled=None):
                         "preview": preview(s, req),
                         "answer": "Review the proposed event." if q.language=="en" else "Проверьте предложенное назначение.",
                     }
-            return {"answer": str(out["answer"])}
+            if not isinstance(out.get('answer'), str) or not out['answer'].strip():
+                raise ValueError('Модель не вернула текст ответа')
+            return {"answer": out["answer"][:8000]}
+        except ValueError as e:
+            raise HTTPException(502, str(e))
         except Exception as e:
             raise HTTPException(
                 502,

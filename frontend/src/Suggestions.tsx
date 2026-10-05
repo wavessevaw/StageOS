@@ -122,7 +122,8 @@ export function SmallModelSettings({
   const [job, setJob] = useState<Obj | null>(null),
     [enabled, setEnabled] = useState(true),
     [error, setError] = useState(""),
-    [busy, setBusy] = useState(false);
+    [busy, setBusy] = useState(false),
+    [check, setCheck] = useState("");
   useEffect(() => {
     let active = true;
     api("/settings/learning")
@@ -204,6 +205,17 @@ export function SmallModelSettings({
         </>
       )}
       {job?.message && <p role="status">{tr(job.message)}</p>}
+      <button disabled={busy || job?.status === 'downloading'} onClick={async () => {
+        setBusy(true); setError(''); setCheck('');
+        try {
+          await api('/settings/llm', 'PUT', settings);
+          const result = await api('/settings/llm/test', 'POST', {});
+          setCheck(result.status === 'Disabled' ? 'Локальная модель отключена' : result.generation === 'PASS'
+            ? 'Модель ответила. Генерация и разбор ответа проверены.' : 'Выбранная модель не найдена на сервере');
+        } catch (error: any) { setError(error.message); }
+        finally { setBusy(false); }
+      }}>{tr('Проверить ответ модели')}</button>
+      {check && <p role="status">{tr(check)}</p>}
       {error && <p role="alert">{tr(error)}</p>}
       <label className="row">
         <input

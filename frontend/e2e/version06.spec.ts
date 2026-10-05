@@ -66,3 +66,19 @@ test('Export reports selected destination, cancellation and browser downloads', 
   expect((await downloaded).suggestedFilename()).toMatch(/\.pdf$/);
   await expect(modal.getByRole('status')).toContainText('Ctrl+J');
 });
+
+test('Model response check shows success and actionable failure', async ({ page, request }) => {
+  const original = await (await request.get('/api/settings/llm')).json();
+  try {
+    await request.put('/api/settings/llm', { data: { enabled: true, provider: 'Ollama', endpoint: 'http://127.0.0.1:11434/v1', model: 'qwen3:0.6b' } });
+    await page.route('**/api/settings/llm/test', route => route.fulfill({ json: { status: 'Connected', selected_model_available: true, generation: 'PASS' } }));
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Настройки', exact: true }).click();
+    await page.getByRole('button', { name: 'Проверить ответ модели', exact: true }).click();
+    await expect(page.getByText('Модель ответила. Генерация и разбор ответа проверены.', { exact: true })).toBeVisible();
+    await page.unroute('**/api/settings/llm/test');
+    await page.route('**/api/settings/llm/test', route => route.fulfill({ status: 502, json: { detail: 'Модель вернула пустой ответ' } }));
+    await page.getByRole('button', { name: 'Проверить ответ модели', exact: true }).click();
+    await expect(page.getByRole('alert').filter({ hasText: 'Модель вернула пустой ответ' })).toBeVisible();
+  } finally { await request.put('/api/settings/llm', { data: original }); }
+});

@@ -503,3 +503,9 @@ Object.assign(english, {
   "Сотрудников:": "Employees:",
   "Всего человеко-часов:": "Total person-hours:",
 });
+Object.assign(english, {
+ "Проверить ответ модели": "Test model response",
+ "Локальная модель отключена": "Local model is disabled",
+ "Модель ответила. Генерация и разбор ответа проверены.": "The model responded. Generation and response parsing verified.",
+ "Выбранная модель не найдена на сервере": "The selected model was not found on the server",
+});
