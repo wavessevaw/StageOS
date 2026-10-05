@@ -60,7 +60,7 @@ def validate_saved_data(session):
     """Reject structurally corrupt snapshots before the active database is switched."""
     from datetime import datetime
     from sqlalchemy import select
-    from .models import Resource, Event, Task, Booking
+    from .models import Resource, Event, Task, Booking, Production
     from .engine import Request
     from .production_editor import validate_production
     resources={r.id:r for r in session.scalars(select(Resource))}
@@ -84,6 +84,14 @@ def validate_saved_data(session):
             validate_production(session,plan['production_snapshot'],check_qualifications=False,allow_retired=True)
         for assignment in plan['assignments']:
             for key in ['actual_id','responsible_id']:
+                if key=='responsible_id' and assignment[key] in (None,0):
+                    index=assignment.get('role_index')
+                    passport=plan.get('production_snapshot') or session.get(Production,event.production_id).data
+                    roles=passport['roles']
+                    if (type(index) is int and 0<=index<len(roles) and assignment['department']=='Артисты'
+                        and roles[index]['role']==assignment['role'] and roles[index].get(request.cast) in (None,0)
+                        and request.role_assignments.get(str(index))==assignment['actual_id']):
+                        continue
                 if assignment[key] not in resources or resources[assignment[key]].kind!='Person':raise ValueError('В плане отсутствует сотрудник')
         for conflict in plan['conflicts']:
             if not {'code','resource','reason','severity'}<=conflict.keys():raise ValueError('Описание конфликта повреждено')

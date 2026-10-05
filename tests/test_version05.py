@@ -229,13 +229,13 @@ def test_actor_slot_without_baseline_and_existing_event_edit(ctx):
     with S.begin() as s:
         production = s.get(Production, 1)
         data = deepcopy(production.data)
-        data["roles"][0]["A"] = None
-        data["roles"][0]["B"] = None
+        data["roles"][0]["A"] = 0
+        data["roles"][0]["B"] = 0
         production.data = data
     r = {**r, "role_assignments": {"0": actor}}
     p = c.post("/api/preview", json=r)
     assert p.status_code == 200, p.text
-    assert p.json()["event_roles"][0]["baseline_id"] is None
+    assert p.json()["event_roles"][0]["baseline_id"] == 0
     assert p.json()["event_roles"][0]["actual_id"] == actor
     saved = confirm(c, r)
     assert saved.status_code == 200, saved.text
@@ -248,3 +248,12 @@ def test_actor_slot_without_baseline_and_existing_event_edit(ctx):
     current = c.get(f"/api/events/{eid}").json()["current"]
     assert current["event_roles"][0]["actual_id"] == actor
     assert "Погрузка" not in [x["name"] for x in current["tasks"]]
+    from backend.database_io import validate_saved_data
+    with S() as session:validate_saved_data(session)
+    backup = c.get("/api/database/export")
+    assert backup.status_code == 200
+    imported = c.post("/api/database/import", content=backup.content)
+    assert imported.status_code == 200, imported.text
+    restored = c.get(f"/api/events/{eid}").json()["current"]
+    assert restored["event_roles"][0]["actual_id"] == actor
+    assert "Погрузка" not in [x["name"] for x in restored["tasks"]]
