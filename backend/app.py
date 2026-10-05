@@ -183,6 +183,8 @@ def create_app(engine=None, static_dir=None, demo_enabled=None):
                     for setting in check.scalars(select(Setting)):
                         if setting.key=='llm':validate_ai(setting.value)
                         elif setting.key=='interface':InterfaceSettings.model_validate(setting.value)
+                        elif setting.key=='learning' and (not isinstance(setting.value,dict) or set(setting.value)!={'enabled'} or not isinstance(setting.value.get('enabled'),bool)):
+                            raise ValueError('Настройки подсказок повреждены')
                         elif setting.key=='theatre' and (not isinstance(setting.value,dict) or not isinstance(setting.value.get('name'),str) or not setting.value['name'].strip()):
                             raise ValueError('Название театра повреждено')
             except Exception as exc:

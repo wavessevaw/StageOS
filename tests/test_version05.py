@@ -257,3 +257,12 @@ def test_actor_slot_without_baseline_and_existing_event_edit(ctx):
     restored = c.get(f"/api/events/{eid}").json()["current"]
     assert restored["event_roles"][0]["actual_id"] == actor
     assert "Погрузка" not in [x["name"] for x in restored["tasks"]]
+
+
+def test_import_rejects_invalid_history_settings(ctx):
+    c,S,b,rs,r=ctx
+    with S.begin() as session:session.merge(Setting(key='learning',value={'enabled':'incorrect'}))
+    backup=c.get('/api/database/export');assert backup.status_code==200
+    with S.begin() as session:session.get(Setting,'learning').value={'enabled':True}
+    assert c.post('/api/database/import',content=backup.content).status_code==422
+    assert c.get('/api/settings/learning').json()=={'enabled':True}
