@@ -747,7 +747,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
                 />{tr("Прогон в день спектакля: 11:00–14:00, обед, вечерний сбор")}</label>
             ))}
             <p className="muted">{tr("Измените начало или длительность этапа: зависимости и занятость пересчитываются. Время спектакля остаётся фиксированным. Явно заданные времена отмечены как закреплённые.")}</p>
-            <AddStage key={p.request.production_id} plan={p} busy={busy} onChange={changes=>changePlan(p,changes)}/>
+            <AddStage key={p.request.production_id+":"+p.start} plan={p} busy={busy} onChange={changes=>changePlan(p,changes)}/>
             <div key={p.fingerprint} className="schedule-editor">
               {p.tasks.map((t: Obj) => (
                 <div className="schedule-row" key={t.name}>
@@ -758,19 +758,18 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
                     defaultValue={t.start.slice(0, 16)}
                     disabled={busy}
                     onBlur={(e) => {
-                      if (
-                        e.target.value &&
-                        e.target.value !== t.start.slice(0, 16)
-                      ) {
+                      const value=e.target.value;
+                      e.target.value=t.start.slice(0,16);
+                      if (value && value !== t.start.slice(0,16)) {
                         if (["Спектакль", "Репетиция"].includes(t.name))
-                          changePlan(p, { start: e.target.value });
+                          changePlan(p, { start: value });
                         else
                           changePlan(p, {
                             task_overrides: {
                               ...p.request.task_overrides,
                               [t.name]: {
                                 ...p.request.task_overrides?.[t.name],
-                                start: e.target.value,
+                                start: value,
                               },
                             },
                           });
@@ -788,8 +787,9 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
                     disabled={busy || t.name === "Спектакль"}
                     onBlur={(e) => {
                       const n = +e.target.value;
+                      e.target.value=String(Math.round((+new Date(t.end)-+new Date(t.start))/60000));
                       if (
-                        n > 0 &&
+                        Number.isInteger(n) && n > 0 && n <= 1440 &&
                         n !==
                           Math.round(
                             (+new Date(t.end) - +new Date(t.start)) / 60000,
