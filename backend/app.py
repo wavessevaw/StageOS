@@ -84,7 +84,7 @@ def create_app(engine=None, static_dir=None, demo_enabled=None):
     with engine.begin() as connection:
         cfg.attributes["connection"] = connection
         command.upgrade(cfg, "head")
-    app = FastAPI(title="StageOS", version="1.0.4")
+    app = FastAPI(title="StageOS", version="1.0.5")
     app.state.Session = Session
 
     @app.middleware("http")
@@ -123,7 +123,7 @@ def create_app(engine=None, static_dir=None, demo_enabled=None):
                 "resources": [serial(x) for x in s.scalars(select(Resource))],
                 "timezone": "Asia/Vladivostok",
                 "theatre_name": s.get(Setting,"theatre").value.get("name","") if s.get(Setting,"theatre") else "",
-                "version": "1.0.4",
+                "version": "1.0.5",
                 "language":s.get(Setting,"interface").value.get("language") if s.get(Setting,"interface") else None,
                 "demo_enabled": demo_enabled,
                 "departments": __import__("backend.production_editor",fromlist=["DEPARTMENTS"]).DEPARTMENTS,
@@ -1003,6 +1003,41 @@ def create_app(engine=None, static_dir=None, demo_enabled=None):
             }
         except Exception as exc:
             raise HTTPException(502, "Local AI не отвечает: " + type(exc).__name__)
+
+    from .small_model import SmallModelJob
+    small_model=SmallModelJob(Session,LOCK)
+
+    @app.get('/api/settings/llm/small-model')
+    def model_download_status():return small_model.status()
+
+    @app.post('/api/settings/llm/small-model')
+    def model_download():return small_model.start(get_ai())
+
+    @app.get('/api/settings/learning')
+    def learning_settings():
+        with Session() as s:
+            value=s.get(Setting,'learning')
+            return value.value if value else {'enabled':True}
+
+    @app.put('/api/settings/learning')
+    def save_learning(body:dict):
+        if set(body)!={'enabled'} or not isinstance(body['enabled'],bool):raise ValueError('Укажите включение подсказок')
+        with LOCK,Session.begin() as s:s.merge(Setting(key='learning',value=body))
+        return body
+
+    @app.post('/api/suggestions')
+    def event_suggestions(r:Request):
+        from .learning import suggest
+        with Session() as s:return suggest(s,r)
+
+    @app.post('/api/suggestions/explain')
+    async def explain_suggestions(r:Request):
+        from .learning import suggest,explain_with_llm
+        with Session() as s:
+            result=suggest(s,r)
+            setting=s.get(Setting,'interface')
+            language=setting.value.get('language','ru') if setting else 'ru'
+        return await explain_with_llm(result,get_ai(),httpx.AsyncClient,language)
 
     @app.post("/api/assistant")
     async def assistant(q: Question):

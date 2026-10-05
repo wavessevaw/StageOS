@@ -22,6 +22,27 @@ class TaskTiming(BaseModel):
         return v.replace(second=0, microsecond=0) if v else v
 
 
+class ExtraTask(BaseModel):
+    name: str = Field(min_length=1,max_length=100)
+    department: str = Field(default='Все',min_length=1,max_length=40)
+    start: datetime
+    duration: StrictInt = Field(ge=1,le=1440)
+    after: str | None = None
+    before: str | None = None
+
+    @field_validator('name','department')
+    @classmethod
+    def trimmed(cls,v):
+        if not v.strip():raise ValueError('Заполните название и подразделение')
+        return v.strip()
+
+    @field_validator('start')
+    @classmethod
+    def local(cls,v):
+        if v.tzinfo:raise ValueError('Только локальное время')
+        return v.replace(second=0,microsecond=0)
+
+
 class Request(BaseModel):
     production_id: StrictInt = Field(gt=0)
     venue_id: StrictInt = Field(gt=0)
@@ -50,6 +71,9 @@ class Request(BaseModel):
     rehearsal_items: list[StrictInt] = Field(default_factory=list)
     run_through: bool = False
     task_overrides: dict[str, TaskTiming] = Field(default_factory=dict)
+    removed_tasks: list[str] = Field(default_factory=list,max_length=50)
+    extra_tasks: list[ExtraTask] = Field(default_factory=list,max_length=50)
+    role_assignments: dict[str, StrictInt] = Field(default_factory=dict)
 
     @field_validator("start")
     @classmethod
@@ -432,6 +456,8 @@ def preview(s, r: Request, production_data=None):
     valid_replacements.update(r.rehearsal_people or [])
     if any(not key.isdecimal() or int(key) not in valid_replacements for key in r.replacements):
         raise ValueError("Замена ссылается на отсутствующую позицию состава")
+    if any(k not in {str(i) for i in range(len(p.data['roles']))} or v<=0 for k,v in r.role_assignments.items()):
+        raise ValueError('Неизвестная роль или неверный исполнитель события')
     rehearsal = r.kind == "Репетиция"
     duration = (
         r.duration
@@ -463,9 +489,11 @@ def preview(s, r: Request, production_data=None):
             {'name':'Обед','department':'Все','start':morning+timedelta(hours=3),'end':morning+timedelta(hours=4)},
             {'name':'Сбор перед спектаклем','department':'Все','start':r.start-timedelta(hours=1),'end':r.start},
         ]
-    if r.task_overrides or r.run_through:
-        from .timing import retime
-        tasks, solver = retime(tasks, r.task_overrides, r.start, r.run_through)
+    from .timing import customize, retime
+    tasks, dependencies = customize(tasks,r.removed_tasks,r.extra_tasks)
+    if r.task_overrides or r.run_through or r.removed_tasks or r.extra_tasks:
+        overrides={**{t.name:TaskTiming(start=t.start,duration=t.duration) for t in r.extra_tasks},**r.task_overrides}
+        tasks, solver = retime(tasks,overrides,r.start,r.run_through,dependencies)
     performance_call = min([t['start'] for t in tasks if t['name']=='Прогон'] or [r.start])
     first = min(t["start"] for t in tasks)
     last = max(t["end"] for t in tasks)
@@ -484,12 +512,13 @@ def preview(s, r: Request, production_data=None):
         else:
             bookings[rid] = {"resource_id": rid, "start": a, "end": b, "label": label}
 
-    def assign(rid, role, dept, a, b, eligible=None):
-        if not rid:
+    def assign(rid, role, dept, a, b, eligible=None, role_index=None):
+        selected=r.role_assignments.get(str(role_index)) if role_index is not None else None
+        if not rid and selected is None:
             if rehearsal and r.rehearsal_people is not None:return
             conflicts.append(issue("unassigned",role,"Не назначен исполнитель выбранного состава","ERROR"))
             return
-        actual = r.replacements.get(str(rid), rid)
+        actual = selected if selected is not None else r.replacements.get(str(rid), rid)
         if rehearsal and r.rehearsal_people is not None and actual not in r.rehearsal_people:
             return
         person = resources.get(actual)
@@ -520,7 +549,8 @@ def preview(s, r: Request, production_data=None):
                 "role": role,
                 "department": dept,
                 "responsible_id": rid,
-                "responsible": resources[rid].name,
+                "responsible": resources[rid].name if rid in resources else "Не назначен",
+                "role_index": role_index,
                 "actual_id": actual,
                 "actual": person.name,
                 "eligible_ids": eligible if eligible is not None else [x.id for x in resources.values() if x.kind == "Person" and dept in x.data.get("qualification", [])],
@@ -553,7 +583,8 @@ def preview(s, r: Request, production_data=None):
             "Артисты",
             performance_call - timedelta(minutes=15 if rehearsal else 90),
             end,
-            role["eligible"],
+            role["eligible"] or None,
+            role_index=i,
         )
     groupids = cast_people(p.data,"groups",r.cast)
     if comp["override"]:
@@ -673,6 +704,12 @@ def preview(s, r: Request, production_data=None):
                     )
             for x in candidates[:required]:
                 book(x.id, techstart, techend, x.name)
+    for task in r.extra_tasks:
+        planned=next(t for t in tasks if t['name']==task.name)
+        for a in assignments:
+            if task.department=='Все' or a['department']==task.department:
+                book(a['actual_id'],planned['start'],planned['end'],a['role'])
+                a['call']=min(a['call'],planned['start'].isoformat())
     book(v.id, techstart, techend, v.name)
     opening = r.start.replace(hour=0,minute=0) + timedelta(hours=v.data.get("opening", 8))
     closing = r.start.replace(hour=0,minute=0) + timedelta(hours=v.data.get("closing", 24))
@@ -724,6 +761,9 @@ def preview(s, r: Request, production_data=None):
         "status": status,
         "compatibility": comp,
         "assignments": assignments,
+        "event_roles": [dict(index=i,role=role['role'],baseline_id=role[r.cast],
+                             actual_id=next((a['actual_id'] for a in assignments if a.get('role_index')==i),None),
+                             eligible_ids=role['eligible']) for i,role in enumerate(p.data['roles']) if i in indices],
         "tasks": [
             {**t, "start": t["start"].isoformat(), "end": t["end"].isoformat()}
             for t in tasks
@@ -832,10 +872,9 @@ def substitutions(s, r):
     variables = {}
     processed = set()
     for a in plan["assignments"]:
-        rid = a["responsible_id"]
+        rid = f"role:{a['role_index']}" if a.get('role_index') is not None else a["responsible_id"]
         if rid in processed:continue
         processed.add(rid)
-        base = resources[rid]
         eligible = [resources[cid] for cid in a['eligible_ids'] if cid in resources and resources[cid].kind == 'Person']
         b = next(x for x in plan["bookings"] if x["resource_id"] == a["actual_id"])
         start = datetime.fromisoformat(b["start"])
@@ -866,7 +905,7 @@ def substitutions(s, r):
                     st, dur, st + dur, flag, f"person_{rid}_{candidate.id}"
                 )
             )
-            penalty = 0 if candidate.id == rid else 10
+            penalty = 0 if candidate.id == a["actual_id"] else 10
             terms.append(flag * penalty)
             options[str(rid)].append(
                 {"id": candidate.id, "name": candidate.name, "penalty": penalty}
@@ -887,11 +926,18 @@ def substitutions(s, r):
         for (rid, cid), flag in variables.items()
         if status in [cp_model.OPTIMAL, cp_model.FEASIBLE] and solver.value(flag)
     }
+    role_mapping={k.split(':',1)[1]:v for k,v in mapping.items() if k.startswith('role:')}
+    legacy_mapping={k:v for k,v in mapping.items() if not k.startswith('role:')}
+    # Keep legacy actor replacement output for existing integrations.
+    for a in plan['assignments']:
+        if a.get('role_index') is not None and str(a['role_index']) in role_mapping and a['responsible_id']:
+            legacy_mapping[str(a['responsible_id'])]=role_mapping[str(a['role_index'])]
     return {
         "status": solver.status_name(status),
         "options": options,
-        "replacements": mapping,
-        "plan": preview(s, r.model_copy(update={"replacements": mapping}))
+        "replacements": legacy_mapping,
+        "role_assignments": role_mapping,
+        "plan": preview(s, r.model_copy(update={"replacements": legacy_mapping,"role_assignments":role_mapping}))
         if mapping
         else None,
     }

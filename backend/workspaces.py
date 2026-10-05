@@ -143,7 +143,7 @@ class TenantDispatch:
         try:
             u=self.r.current(req);method=req.method
             if u['role']!='admin' and (path.startswith('/api/database/') or path.startswith('/api/settings/llm') or path=='/api/diagnostics'):raise HTTPException(403,'Требуются права администратора')
-            read_only={'/api/preview','/api/windows','/api/substitutions','/api/equipment-substitutions','/api/assistant'}
+            read_only={'/api/preview','/api/windows','/api/substitutions','/api/equipment-substitutions','/api/assistant','/api/suggestions','/api/suggestions/explain'}
             if method not in ['GET','HEAD'] and path not in read_only and path!='/api/settings/interface':
                 if u['role']=='viewer':raise HTTPException(403,'Доступ только для просмотра')
                 if u['role']!='admin' and (path.startswith('/api/database/') or path.startswith('/api/settings/') or path.endswith('/approve') or path.endswith('/reject')):

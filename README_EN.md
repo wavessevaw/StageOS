@@ -1,8 +1,10 @@
-**StageOS Server 1.0.4:** host your theatre database on your PC and connect staff desktops with an address, connection code and personal accounts. [Setup guide (Russian)](docs/SERVER_SETUP_RU.md).
+**New in 1.0.5:** edit production stages, mix actors per role for one event, and review suggestions learned from confirmed theatre history. Live server diagnostics and automatic Windows network setup are included. [Release notes](docs/releases/1.0.5.md).
+
+**StageOS Server 1.0.5:** host your theatre database on your PC and connect staff desktops with an address, connection code and personal accounts. [Setup guide (Russian)](docs/SERVER_SETUP_RU.md).
 
 <div align="center">
 
-Version 1.0.4 adds isolated theatre workspaces, personal sign-in and administrator/planner/viewer roles. Switch theatres and manage your team from the account menu.
+Version 1.0.5 adds isolated theatre workspaces, personal sign-in and administrator/planner/viewer roles. Switch theatres and manage your team from the account menu.
 
 <img src="docs/media/icon.svg" width="120" alt="StageOS">
 
@@ -88,7 +90,7 @@ Switch **Russian / English** in the header. Your preference is stored in the dat
 
 ## Release status
 
-**Version 1.0.4** adds StageOS Server on your PC, a shared database for multiple desktops, connection codes, personal accounts, automatic refresh and stale-plan protection. Incomplete passports, independent department casts and PDF/PNG exports remain available. The working package starts with an empty database. Publication is gated by [backend, browser UI and Windows checks](https://github.com/wavessevaw/StageOS/actions/workflows/release.yml); exact results and limitations are included in the release archive. Back up your database before updating.
+**Version 1.0.5** adds StageOS Server on your PC, a shared database for multiple desktops, connection codes, personal accounts, automatic refresh and stale-plan protection. Incomplete passports, independent department casts and PDF/PNG exports remain available. The working package starts with an empty database. Publication is gated by [backend, browser UI and Windows checks](https://github.com/wavessevaw/StageOS/actions/workflows/release.yml); exact results and limitations are included in the release archive. Back up your database before updating.
 
 <details>
 <summary>Verification and current limits</summary>

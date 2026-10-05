@@ -86,3 +86,9 @@ The production schema remains unchanged. A separate accounts.sqlite registry sto
 The desktop localhost gateway owns connection.json and serves the bundled React UI. In host mode a second Uvicorn listener on 0.0.0.0 serves the same workspace registry/core apps. LAN requests require a random connection code followed by a per-user theatre session. Theatre creation and first-admin setup remain host-local. In client mode API requests are proxied to the selected host; binary exports and HttpOnly cookies are forwarded. No production data is copied to the client. HTTPX clients have no shared cookie jar across users.
 
 SQLite databases and accounts.sqlite remain on the host. Thread locks serialize mutations across both event loops, while core fingerprints and event/production versions reject stale confirmations. Per-theatre revisions let React refresh every five seconds. Client connection failure returns 503 without a local-write fallback. Restart invalidates sessions. The host is not a Windows service. LAN transport is HTTP; internet access requires external HTTPS or VPN.
+
+## Event planning 1.0.5
+
+Request stores removed_tasks, extra_tasks and role_assignments in the event JSON. Production passports are unchanged. CP-SAT reconnects dependencies across removed stages, rejects cycles, pins custom stage times, and recalculates reservations. Main event cannot be removed. Preview fingerprint validation and transactional save protect the complete plan.
+
+Confirmed history is grouped into relative-time templates per production/venue/event type (latest 200 eligible events). Two matching records are required. Forced, cancelled, draft and pending events are excluded. Candidates pass the deterministic preview engine again. Optional LLM only selects a validated candidate ID and explains it. No neural weight fine-tuning or automatic event writes occur. Ollama downloads the optional small model outside the application archive.

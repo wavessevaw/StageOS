@@ -1,3 +1,5 @@
+import {HistorySuggestions,SmallModelSettings} from './Suggestions';
+import {EventRoles,AddStage,removeStage} from './EventPlanEditor';
 import { tr, useLanguage, setLanguage, getLanguage, Language } from "./i18n";
 import React, { useState, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
@@ -99,11 +101,11 @@ function shiftedStart(req: Obj, start: string): Obj {
     const edit = raw as Obj;
     return [name, {...edit, ...(edit.start && Number.isFinite(delta) ? {start:local(new Date(+new Date(edit.start)+delta))} : {})}];
   }));
-  return {...req,start,task_overrides:edits};
+  return {...req,start,task_overrides:edits,extra_tasks:(req.extra_tasks||[]).map((t:Obj)=>({...t,start:Number.isFinite(delta)?local(new Date(+new Date(t.start)+delta)):t.start}))};
 }
 const today = local(new Date()).slice(0,10);
 function newEventForm(f: Obj): Obj {
-  return { ...f, event_id: undefined, version: undefined, replacements: {}, task_overrides: {}, force: false, override_reason: "", notes: "" };
+  return { ...f, event_id: undefined, version: undefined, replacements: {}, role_assignments:{}, removed_tasks:[], extra_tasks:[], task_overrides: {}, force: false, override_reason: "", notes: "" };
 }
 function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
   const language=useLanguage();
@@ -216,6 +218,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
       return next;
     });
     if (!result && optimistic) setPreview(p);
+    return result;
   }
   const cal = useRef<FullCalendar>(null);
   const resources: Obj[] = boot?.resources || [],
@@ -367,7 +370,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
     if (p === "Добавить спектакль") newPassport();
   }
   function update(k: string, v: any) {
-    setForm((f) => k === "start" ? shiftedStart(f, v) : ({ ...f, [k]: v, ...(k === "kind" ? { task_overrides:{}, run_through:false, rehearsal_people:null, rehearsal_items:[] } : {}) }));
+    setForm((f) => k === "start" ? shiftedStart(f, v) : ({ ...f, [k]: v, ...(k === "kind"||k === "production_id" ? { task_overrides:{},removed_tasks:[],extra_tasks:[],role_assignments:{},replacements:{},run_through:false,rehearsal_people:null,rehearsal_items:[] } : k==="cast"?{role_assignments:{},replacements:{}}:{}) }));
     setWindows([]);
   }
   async function run(fn: () => Promise<any>) {
@@ -633,6 +636,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
         {tr(p.request.force && (
           <p className="notice">{tr("Принудительное назначение. Конфликты сохранены и требуют решения.")}</p>
         ))}
+        {p === preview && !p.demo_scenario && <EventRoles plan={p} resources={resources} busy={busy} onChange={changes=>changePlan(p,changes)}/>}
         <h3>{tr("Ответственные и состав")}</h3>
         <div className="accordion-grid">
           {[...new Set(p.assignments.map((a: Obj) => a.department))].map(
@@ -660,7 +664,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
                         </small>
                       </span>
                       <time>{tr(time(a.call))}</time>
-                      {p === preview && !p.demo_scenario && (
+                      {p === preview && !p.demo_scenario && a.department!=="Артисты" && (
                         <select
                           aria-label={"Заменить " + a.actual}
                           value={a.actual_id}
@@ -737,12 +741,13 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
                   onChange={(e) =>
                     changePlan(p, {
                       run_through: e.target.checked,
-                      task_overrides: {},
+                      task_overrides: {}, removed_tasks:[], extra_tasks:[],
                     })
                   }
                 />{tr("Прогон в день спектакля: 11:00–14:00, обед, вечерний сбор")}</label>
             ))}
             <p className="muted">{tr("Измените начало или длительность этапа: зависимости и занятость пересчитываются. Время спектакля остаётся фиксированным. Явно заданные времена отмечены как закреплённые.")}</p>
+            <AddStage key={p.request.production_id} plan={p} busy={busy} onChange={changes=>changePlan(p,changes)}/>
             <div key={p.fingerprint} className="schedule-editor">
               {p.tasks.map((t: Obj) => (
                 <div className="schedule-row" key={t.name}>
@@ -806,6 +811,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
                     }}
                   />
                   <small>{tr("до ")}{tr(time(t.end))}</small>
+                  {!["Спектакль","Репетиция"].includes(t.name)&&<button disabled={busy} aria-label={tr("Удалить этап")+" "+t.name} onClick={()=>changePlan(p,removeStage(p,t.name))}>{tr("Удалить этап")}</button>}
                   {p.request.task_overrides?.[t.name] && (
                     <button
                       onClick={() => {
@@ -880,7 +886,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
           )))}
         </nav>
         <div className="sidebar-bottom">
-          <span className="online" />{tr("Локальная база данных")}<small>{tr("StageOS · 1.0.4")}</small>
+          <span className="online" />{tr("Локальная база данных")}<small>{tr("StageOS · 1.0.5")}</small>
         </div>
       </aside>
       <main>
@@ -1002,6 +1008,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
                           ...f,
                           production_id: +v,
                           replacements: {},
+                          role_assignments: {}, removed_tasks: [], extra_tasks: [], run_through:false,
                           scenes: [],
                           task_overrides: {},
                           rehearsal_people: null,
@@ -1109,6 +1116,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
                     </button>
                   </div>
                 </div>
+                <HistorySuggestions request={form} api={api} onReview={analyze}/>
                 <div className="section-title">
                   <h3>{tr("Всё под контролем")}</h3>
                   <span className="muted">
@@ -2556,6 +2564,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
                         })
                       }
                     >{tr("Сохранить")}</button>
+                    <SmallModelSettings api={api} settings={settings} onSettings={setSettings}/>
                     <p className="muted">{tr("Основные функции не зависят от ИИ. При обращении к модели передаются данные сотрудников и расписания на указанный сервер.")}</p>
                   </section>
                   <section className="panel">

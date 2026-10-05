@@ -44,16 +44,15 @@ test("Editable production timing and replacement persisted from event", async ({
   await expect(
     modal.getByRole("button", { name: "Снять закрепление" }),
   ).toBeVisible();
-  await modal.locator("summary").filter({ hasText: "Артисты" }).first().click();
   const replace = modal
-    .locator('select[aria-label^="Заменить"]')
+    .locator('.event-role-row select')
     .filter({ visible: true })
     .first();
   const before = await replace.inputValue();
   const options = await replace
     .locator("option")
     .evaluateAll((nodes) => nodes.map((n) => (n as HTMLOptionElement).value));
-  const chosen = options.find((x) => x !== before)!;
+  const chosen = options.find((x) => x && x !== before)!;
   await replace.selectOption(chosen);
   await expect(
     modal.getByRole("button", { name: "Подтвердить", exact: true }),
@@ -64,7 +63,7 @@ test("Editable production timing and replacement persisted from event", async ({
   expect(updated.current.request.task_overrides["Выезд"].start).toBe(
     "2026-11-16T08:00:00",
   );
-  expect(Object.values(updated.current.request.replacements)).toContain(
+  expect(Object.values(updated.current.request.role_assignments)).toContain(
     +chosen,
   );
 });

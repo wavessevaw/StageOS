@@ -52,7 +52,7 @@ class LanAccess:
             return await self.app(scope, receive, send)
         req = Request(scope)
         if req.url.path == '/api/network/hello' and req.method == 'GET':
-            return await JSONResponse({'product':'StageOS Server','version':'1.0.4','protocol':PROTOCOL})(scope, receive, send)
+            return await JSONResponse({'product':'StageOS Server','version':'1.0.5','protocol':PROTOCOL})(scope, receive, send)
         if req.url.path.startswith('/api'):
             if not secrets.compare_digest(req.headers.get('x-stageos-code','').encode(), self.code.encode()):
                 return await JSONResponse({'detail':'Неверный код подключения к серверу'},403)(scope,receive,send)
