@@ -1,4 +1,5 @@
 import {HistorySuggestions,SmallModelSettings} from './Suggestions';
+import {CastProposal} from './CastProposal';
 import {saveFile} from './saveFile';
 import {EventRoles,AddStage,removeStage} from './EventPlanEditor';
 import { tr, useLanguage, setLanguage, getLanguage, Language } from "./i18n";
@@ -1753,6 +1754,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
                       </div>
                     </div>
                     <ImportedData data={selected.data} resource={resource}/>
+                    <CastProposal key={`${selected.id}:${selected.version}`} production={selected} api={api} onSaved={async p=>{await load();setSelected(p);setToast(tr('Составы сохранены'));}}/>
                     <div className="segmented big">
                       <button
                         className={tab === "Люди" ? "chosen" : ""}

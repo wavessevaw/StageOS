@@ -1,3 +1,5 @@
+**New in 1.0.7:** local AI cast proposals, eligibility checks, manual review and explicit confirmation. [Release notes](docs/releases/1.0.7.md).
+
 **New in 1.0.6:** morning orchestra setup alongside stage work, lunch-aware checks, preparation suggestions after two repetitions, explicit export destinations and accurate employee workload. [Release notes](docs/releases/1.0.6.md).
 
 **New in 1.0.5:** edit production stages, mix actors per role for one event, and review suggestions learned from confirmed theatre history. Live server diagnostics and automatic Windows network setup are included. [Release notes](docs/releases/1.0.5.md).

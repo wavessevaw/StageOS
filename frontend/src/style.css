@@ -1421,3 +1421,7 @@ details > form {
 .event-role-editor{padding:16px;border:1px solid #d7e4df;background:#f4f9f6;border-radius:14px;margin:18px 0}.event-role-row{display:flex;gap:12px;align-items:center}.event-role-row .field{flex:1;margin:8px 0}.stage-toolbar{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}.extra-stage-form{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:16px;border:1px solid #dce2e8;border-radius:12px;background:#f7f9fb}.extra-stage-form .field{margin:0}.extra-stage-form .primary{grid-column:1/-1}.schedule-row{flex-wrap:wrap}.event-role-row button{font-size:12px}
 
 .history-suggestions{margin:20px 0;background:#f4f8f5}.suggestion-options{display:grid;gap:12px;margin:16px 0}.suggestion-options>div{padding:14px;background:white;border:1px solid #dce7df;border-radius:12px}.suggestion-options button{margin-left:16px}.small-model-settings{border-top:1px solid #e1e7e2;margin-top:18px;padding-top:12px}.small-model-settings progress{display:block;width:100%;margin:12px 0}.small-model-settings .row{margin-top:16px}
+.cast-proposal-row {padding: 16px 0; border-bottom: 1px solid var(--border, #e2e5ee);}
+.cast-proposal select {max-width: 420px; margin: 8px;}
+.cast-candidates {display: grid; grid-template-columns: repeat(auto-fit,minmax(220px,1fr)); gap: 8px; margin: 12px 0;}
+.cast-candidates label {display: flex; align-items: center; gap: 8px;}

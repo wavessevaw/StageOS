@@ -144,6 +144,9 @@ class TenantDispatch:
             u=self.r.current(req);method=req.method
             if u['role']!='admin' and (path.startswith('/api/database/') or path.startswith('/api/settings/llm') or path=='/api/diagnostics'):raise HTTPException(403,'Требуются права администратора')
             read_only={'/api/preview','/api/windows','/api/substitutions','/api/equipment-substitutions','/api/assistant','/api/suggestions','/api/suggestions/explain'}
+            cast_proposal = path.startswith('/api/productions/') and path.endswith('/cast-proposal')
+            if cast_proposal:
+                read_only.add(path)
             if method not in ['GET','HEAD'] and path not in read_only and path!='/api/settings/interface':
                 if u['role']=='viewer':raise HTTPException(403,'Доступ только для просмотра')
                 if u['role']!='admin' and (path.startswith('/api/database/') or path.startswith('/api/settings/') or path.endswith('/approve') or path.endswith('/reject')):
@@ -170,7 +173,7 @@ class TenantDispatch:
             tenant=self.r.tenant(u['theatre_id'])
             # Serialize writes across LAN and local host event loops. Recompute preview
             # and commit inside the same critical section; stale versions still fail.
-            if method in ['POST','PUT','PATCH','DELETE']:
+            if method in ['POST','PUT','PATCH','DELETE'] and not cast_proposal:
                 import anyio
                 with self.r.lock:mutation=self.r.mutation_locks.setdefault(u['theatre_id'],threading.Lock())
                 await anyio.to_thread.run_sync(mutation.acquire)

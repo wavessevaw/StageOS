@@ -1,0 +1,36 @@
+import {test,expect} from '@playwright/test';
+test('Cast proposals are editable, rejectable and saved only after confirmation',async({page,request})=>{
+  await request.post('/api/demo');
+  const boot=await(await request.get('/api/bootstrap')).json();
+  const original=boot.productions[0];
+  const clone=await(await request.post(`/api/productions/${original.id}/clone`,{data:{name:'Проверка составов локальной модели'}})).json();
+  const data=JSON.parse(JSON.stringify(clone.data));
+  data.roles.forEach((r:any)=>{r.A=0;r.B=0});
+  const p=await(await request.patch(`/api/productions/${clone.id}`,{data:{version:clone.version,data}})).json();
+  const role=p.data.roles[0];
+  const candidates=role.eligible.map((id:number)=>({id,name:boot.resources.find((r:any)=>r.id===id).name}));
+  const proposal={production_id:p.id,version:p.version,rows:['A','B'].map(cast=>({
+    key:`role:0:${cast}`,label:role.role,department:'Артисты',cast,current:[],allowed:role.eligible,
+    count:1,section:'roles',target:0,candidates,proposed:[role.eligible[0]],issue:''}))};
+  await page.route(`**/api/productions/${p.id}/cast-proposal`,route=>route.fulfill({json:proposal}));
+  await page.goto('/');
+  await page.getByRole('button',{name:'Постановки',exact:true}).click();
+  await page.locator('.production-card').filter({hasText:p.name}).click();
+  await page.getByRole('button',{name:'Предложить составы с помощью модели'}).click();
+  await page.getByRole('button',{name:'Получить предложение'}).click();
+  await expect(page.getByText('Предложение не сохранено. Занятость проверяется при назначении события.')).toBeVisible();
+  let actual=await(await request.get('/api/bootstrap')).json();
+  expect(actual.productions.find((x:any)=>x.id===p.id).data.roles[0].A).toBe(0);
+  await page.getByRole('button',{name:'Отклонить предложение'}).click();
+  await expect(page.getByRole('button',{name:'Подтвердить и сохранить составы'})).toHaveCount(0);
+  await page.getByRole('button',{name:'Получить предложение'}).click();
+  await page.getByLabel(`${role.role} A`,{exact:true}).selectOption(String(role.eligible[1]));
+  await page.getByLabel(`${role.role} B`,{exact:true}).selectOption('');
+  await page.getByRole('button',{name:'Подтвердить и сохранить составы'}).click();
+  await expect(page.getByText('Составы сохранены',{exact:true})).toBeVisible();
+  actual=await(await request.get('/api/bootstrap')).json();
+  const saved=actual.productions.find((x:any)=>x.id===p.id);
+  expect(saved.data.roles[0].A).toBe(role.eligible[1]);
+  expect(saved.data.roles[0].B).toBe(0);
+  expect(saved.version).toBe(p.version+1);
+});

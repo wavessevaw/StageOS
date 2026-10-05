@@ -774,6 +774,43 @@ def create_app(engine=None, static_dir=None, demo_enabled=None):
             )
             return serial(p)
 
+    @app.post('/api/productions/{pid}/cast-proposal')
+    async def production_cast_proposal(pid: int, body: dict):
+        from .cast_proposals import propose, slots
+        cfg = get_ai()
+        if not cfg.get('enabled'):
+            raise HTTPException(409, 'Включите локальную модель в настройках')
+        with Session() as s:
+            p = s.get(Production, pid)
+            if not p:
+                raise HTTPException(404, 'Постановка не найдена')
+            department = body.get('department', 'Артисты')
+            if department not in {r['department'] for r in slots(s, p)}:
+                raise HTTPException(422, 'В постановке нет такого подразделения')
+            return await propose(s, p, cfg, httpx.AsyncClient, department)
+
+    @app.post('/api/productions/{pid}/cast-proposal/confirm')
+    def confirm_production_cast(pid: int, body: dict):
+        from .cast_proposals import Confirmation, checked_data, slots
+        request = Confirmation.model_validate(body)
+        with LOCK, Session.begin() as s:
+            p = s.get(Production, pid)
+            if not p:
+                raise HTTPException(404, 'Постановка не найдена')
+            if p.version != request.version:
+                raise HTTPException(409, 'Версия постановки устарела. Получите новое предложение.')
+            before = serial(p)
+            rows = slots(s, p)
+            if not any(c.people and any(r['key']==c.key and not r['current'] for r in rows) for c in request.choices):
+                raise HTTPException(422, 'Нет новых назначений для сохранения')
+            data = checked_data(s, p, rows, request.choices)
+            if data == p.data:
+                raise HTTPException(422, 'Нет новых назначений для сохранения')
+            p.data = data
+            p.version += 1
+            s.add(Audit(action='Составы подтверждены', data={'before':before, 'after':serial(p)}))
+            return serial(p)
+
     @app.delete("/api/productions/{pid}")
     def delete_production(pid: int):
         with LOCK, Session.begin() as s:
