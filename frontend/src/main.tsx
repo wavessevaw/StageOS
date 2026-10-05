@@ -883,7 +883,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
           )))}
         </nav>
         <div className="sidebar-bottom">
-          <span className="online" />{tr("Локальная база данных")}<small>{tr("StageOS · 1.0.5")}</small>
+          <span className="online" />{tr("Локальная база данных")}<small>{tr("StageOS · 1.0.8")}</small>
         </div>
       </aside>
       <main>

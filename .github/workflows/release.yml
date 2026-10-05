@@ -59,7 +59,7 @@ jobs:
           fi
           gh release create "$tag" release-assets/* \
             --target "$GITHUB_SHA" \
-            --title "StageOS $version — составы постановок с локальным помощником" \
+            --title "StageOS $version — исправление предложений Qwen" \
             --notes-file "docs/releases/$version.md" \
             --draft
           gh release edit "$tag" --draft=false

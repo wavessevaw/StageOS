@@ -6,12 +6,14 @@ test('Cast proposals are editable, rejectable and saved only after confirmation'
   const clone=await(await request.post(`/api/productions/${original.id}/clone`,{data:{name:'Проверка составов локальной модели'}})).json();
   const data=JSON.parse(JSON.stringify(clone.data));
   data.roles.forEach((r:any)=>{r.A=0;r.B=0});
+  data.roles[1].role='Семейная пара';
   const p=await(await request.patch(`/api/productions/${clone.id}`,{data:{version:clone.version,data}})).json();
   const role=p.data.roles[0];
   const candidates=role.eligible.map((id:number)=>({id,name:boot.resources.find((r:any)=>r.id===id).name}));
   const proposal={production_id:p.id,version:p.version,rows:['A','B'].map(cast=>({
     key:`role:0:${cast}`,label:role.role,department:'Артисты',cast,current:[],allowed:role.eligible,
     count:1,section:'roles',target:0,candidates,proposed:[role.eligible[0]],issue:''}))};
+  proposal.rows.push(...['A','B'].map(cast=>({...proposal.rows[0],key:`role:1:${cast}`,label:'Семейная пара',cast,target:1,count:0,proposed:[]})));
   await page.route(`**/api/productions/${p.id}/cast-proposal`,route=>route.fulfill({json:proposal}));
   await page.goto('/');
   await page.getByRole('button',{name:'Постановки',exact:true}).click();
@@ -19,6 +21,8 @@ test('Cast proposals are editable, rejectable and saved only after confirmation'
   await page.getByRole('button',{name:'Предложить составы с помощью модели'}).click();
   await page.getByRole('button',{name:'Получить предложение'}).click();
   await expect(page.getByText('Предложение не сохранено. Занятость проверяется при назначении события.')).toBeVisible();
+  await expect(page.getByLabel('Семейная пара A',{exact:true})).toBeDisabled();
+  await expect(page.getByLabel('Семейная пара B',{exact:true})).toBeDisabled();
   let actual=await(await request.get('/api/bootstrap')).json();
   expect(actual.productions.find((x:any)=>x.id===p.id).data.roles[0].A).toBe(0);
   await page.getByRole('button',{name:'Отклонить предложение'}).click();

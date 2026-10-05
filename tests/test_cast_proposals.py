@@ -23,7 +23,8 @@ def mock_model(monkeypatch, build):
     async def handle(req):
         body=json.loads(req.content)
         assert req.url.path=='/api/chat' and body['think'] is False
-        context=json.loads(body['messages'][1]['content'])
+        item=json.loads(body['messages'][0]['content'].split('\nДанные: ',1)[1])
+        context={'slots':[item]}
         return httpx.Response(200,json={'message':{'content':json.dumps(build(context))}})
     factory=httpx.AsyncClient
     monkeypatch.setattr('backend.app.httpx.AsyncClient',lambda **kw:factory(transport=httpx.MockTransport(handle),**kw))

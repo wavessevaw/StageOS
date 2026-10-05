@@ -1,3 +1,5 @@
+**New in 1.0.8:** bounded Qwen cast requests, strict numeric ID validation, one correction retry and explicit rejection details. Collective entries remain unassigned until clarified. [Release notes](docs/releases/1.0.8.md).
+
 **New in 1.0.7:** local AI cast proposals, eligibility checks, manual review and explicit confirmation. [Release notes](docs/releases/1.0.7.md).
 
 **New in 1.0.6:** morning orchestra setup alongside stage work, lunch-aware checks, preparation suggestions after two repetitions, explicit export destinations and accurate employee workload. [Release notes](docs/releases/1.0.6.md).

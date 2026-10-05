@@ -35,7 +35,7 @@ export function CastProposal({production, api, onSaved}:{production:Obj; api:(pa
           <h4>{r.section==='roles'?r.label:tr(r.label)} · {tr(r.cast==='A'?'Первый состав':'Второй состав')}</h4>
           {r.issue&&<p className="muted">{tr(r.issue)}</p>}
           {r.current.length?<p>{tr('Уже назначены')}: {r.current.map((id:number)=>r.candidates.find((c:Obj)=>c.id===id)?.name||String(id)).join(', ')}</p>:<>
-            {r.section==='roles'?<select aria-label={`${r.label} ${r.cast}`} value={r.proposed[0]||''} disabled={busy} onChange={e=>edit(r.key,e.target.value?[Number(e.target.value)]:[])}>
+            {r.section==='roles'?<select aria-label={`${r.label} ${r.cast}`} value={r.proposed[0]||''} disabled={busy||r.count===0} onChange={e=>edit(r.key,e.target.value?[Number(e.target.value)]:[])}>
               <option value="">{tr('Не назначен')}</option>{r.candidates.map((c:Obj)=><option key={c.id} value={c.id}>{c.name}</option>)}
             </select>:<><small>{tr('Количество мест')}: {r.count}</small><div className="cast-candidates">{r.candidates.map((c:Obj)=><label key={c.id}><input type="checkbox" checked={r.proposed.includes(c.id)} disabled={busy||(!r.proposed.includes(c.id)&&r.proposed.length>=r.count)} onChange={e=>edit(r.key,e.target.checked?[...r.proposed,c.id]:r.proposed.filter((id:number)=>id!==c.id))}/>{c.name}</label>)}</div></>}
           </>}
