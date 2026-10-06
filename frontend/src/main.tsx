@@ -648,6 +648,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
         {tr(p.request.force && (
           <p className="notice">{tr("Принудительное назначение. Конфликты сохранены и требуют решения.")}</p>
         ))}
+        {p === preview && !p.demo_scenario && <ArtsPeople resources={resources} busy={busy} selected={p.request.kind==="Репетиция"?(p.request.rehearsal_people||[]):(p.request.additional_people||[])} onChange={ids=>changePlan(p,{[p.request.kind==="Репетиция"?"rehearsal_people":"additional_people"]:ids})}/>}
         {p === preview && !p.demo_scenario && <EventRoles plan={p} resources={resources} busy={busy} onChange={changes=>changePlan(p,changes)}/>}
         <h3>{tr("Ответственные и состав")}</h3>
         <div className="accordion-grid">
@@ -1064,7 +1065,6 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
                       />
                     </label>
                   </div>
-                  <ArtsPeople resources={resources} selected={form.kind==="Репетиция"?(form.rehearsal_people||[]):(form.additional_people||[])} onChange={ids=>update(form.kind==="Репетиция"?"rehearsal_people":"additional_people",ids)}/>
                   {form.kind !== "Репетиция" && <label className="field"><span>{tr("Общая продолжительность с антрактами, мин")}</span><input type="number" min={15} max={480} value={form.duration ?? prod?.data.duration ?? 120} onChange={e=>update("duration",e.target.value ? +e.target.value : undefined)}/></label>}
                   {form.kind === "Репетиция" && (
                     <div className="row rehearsal">

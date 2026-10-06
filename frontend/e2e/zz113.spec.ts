@@ -2,12 +2,16 @@ import {test,expect} from '@playwright/test';
 test('General call fits the appointment screen and multiple responsibles fit the passport',async({page})=>{
  await page.request.post('/api/demo');await page.goto('/');
  await expect(page.getByRole('heading',{name:'Поднимем занавес.'})).toBeVisible();
- const arts=page.locator('.arts-people');await expect(arts).toBeVisible();
+ await expect(page.locator('.arts-people')).toHaveCount(0);
+ await page.getByRole('button',{name:'Проверить и назначить',exact:true}).click();
+ const dialog=page.getByRole('dialog',{name:'Предварительный план'});
+ const arts=dialog.locator('.arts-people');await expect(arts).toBeVisible();
  await arts.getByRole('button',{name:'Добавить всех',exact:true}).click();
  await arts.locator('summary').click();
  expect(await arts.locator('input:checked').count()).toBeGreaterThan(20);
  const fit=await arts.evaluate(el=>el.scrollWidth<=el.clientWidth+1);expect(fit).toBeTruthy();
  await page.screenshot({path:'../docs/113-general-call.png',fullPage:true});
+ await dialog.getByRole('button',{name:'Закрыть Предварительный план',exact:true}).click();
  await page.getByRole('button',{name:'Постановки',exact:true}).first().click();
  await page.locator('.production-card').first().click();
  await page.getByRole('button',{name:'Редактировать постановку',exact:true}).click();
