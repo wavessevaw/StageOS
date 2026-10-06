@@ -8,9 +8,13 @@ function headersFor(input?:HeadersInit){const headers=new Headers(input);const c
 function transient(){return Object.assign(Error(message),{transient:true})}
 function recover(){
  if(recovering||!authenticated)return;
- state(true);const current=++generation,deadline=Date.now()+30000;
+ state(true);const current=++generation;let deadline=Date.now()+30000;
+ const resumed=()=>{if(!document.hidden)deadline=Date.now()+30000};
+ document.addEventListener("visibilitychange",resumed);
  void(async()=>{
-  while(current===generation&&Date.now()<deadline){
+  try{while(current===generation){
+   if(document.hidden){await new Promise(r=>setTimeout(r,1000));deadline=Date.now()+30000;continue}
+   if(Date.now()>=deadline)break;
    try{
     const response=await fetch(mobile?'/api/mobile/session':'/api/auth/session',{headers:headersFor(),signal:AbortSignal.timeout(Math.min(5000,Math.max(1,deadline-Date.now())))});
     if(current!==generation)return;
@@ -21,6 +25,7 @@ function recover(){
    await new Promise(r=>setTimeout(r,Math.min(3000,Math.max(0,deadline-Date.now()))));
   }
   if(current===generation)finish();
+  }finally{document.removeEventListener("visibilitychange",resumed)}
  })();
 }
 export async function apiFetch(input:RequestInfo|URL,init?:RequestInit):Promise<Response>{

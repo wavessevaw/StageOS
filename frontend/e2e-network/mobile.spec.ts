@@ -40,6 +40,19 @@ test('Phone signs in without connection code, sees only its own weekly assignmen
   await expect(page.getByRole('heading',{name:'Восстанавливаем связь с сервером'})).toHaveCount(0,{timeout:16000});
   await expect(page.getByRole('heading',{name:'Василиса Серова',exact:true})).toBeVisible();
   await page.unroute('**/api/mobile/**');await page.getByRole('button',{name:'Текущая неделя'}).click();await expect(page.getByRole('heading',{name:'Мой спектакль'})).toBeVisible();
+  // Safari may suspend timers in the background; recovery budget starts again on return.
+  let backgroundFailure=true;
+  await page.route('**/api/mobile/**',route=>backgroundFailure?route.fulfill({status:503,body:'Temporary outage'}):route.continue());
+  await page.getByRole('button',{name:'Следующая неделя'}).click();
+  await expect(page.getByRole('heading',{name:'Восстанавливаем связь с сервером'})).toBeVisible();
+  await page.evaluate(()=>{(window as any).__hidden=true;Object.defineProperty(document,'hidden',{configurable:true,get:()=>(window as any).__hidden});document.dispatchEvent(new Event('visibilitychange'))});
+  await page.waitForTimeout(35000);
+  await expect(page.getByRole('heading',{name:'Вход в личное расписание'})).toHaveCount(0);
+  backgroundFailure=false;
+  await page.evaluate(()=>{(window as any).__hidden=false;document.dispatchEvent(new Event('visibilitychange'))});
+  await expect(page.getByRole('heading',{name:'Восстанавливаем связь с сервером'})).toHaveCount(0,{timeout:15000});
+  await page.unroute('**/api/mobile/**');await page.getByRole('button',{name:'Текущая неделя'}).click();
+  await expect(page.getByRole('heading',{name:'Мой спектакль'})).toBeVisible();
   await page.route('**/api/mobile/**',route=>route.fulfill({status:503,contentType:'text/html',body:'<h1>Tunnel unavailable</h1>'}));
   await expect(page.getByRole('heading',{name:'Вход в личное расписание'})).toBeVisible({timeout:70000});await expect(page.getByLabel('Пароль',{exact:true})).toHaveValue('');
   await page.unroute('**/api/mobile/**');await page.reload();await expect(page.getByRole('heading',{name:'Вход в личное расписание'})).toBeVisible();

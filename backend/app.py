@@ -84,8 +84,10 @@ def create_app(engine=None, static_dir=None, demo_enabled=None):
     with engine.begin() as connection:
         cfg.attributes["connection"] = connection
         command.upgrade(cfg, "head")
-    app = FastAPI(title="StageOS", version="1.0.13")
+    app = FastAPI(title="StageOS", version="1.0.14")
     app.state.Session = Session
+    from starlette.middleware.gzip import GZipMiddleware
+    app.add_middleware(GZipMiddleware,minimum_size=2048,compresslevel=4)
 
     @app.middleware("http")
     async def access(req: HttpRequest, call_next):
@@ -344,24 +346,26 @@ def create_app(engine=None, static_dir=None, demo_enabled=None):
                     )
                 )
             out = []
-            for ev in s.scalars(query.order_by(Event.start)):
+            selected_events=list(s.scalars(query.order_by(Event.start)))
+            from .engine import calendar_context
+            context=calendar_context(s,selected_events) if selected_events else None
+            for ev in selected_events:
                 r = Request(
                     **{**ev.data["request"], "event_id": ev.id, "version": ev.version}
                 )
                 from .engine import saved_event_plan
-                p = saved_event_plan(s, ev)
+                p = saved_event_plan(s, ev, context)
                 out.append(
                     {
                         **serial(ev),
                         "data": {"request": r.model_dump(mode="json")},
                         "needs_plan": bool(p.get("needs_plan")),
+                        "end": p["end"],
                         "health": p["status"],
                         "conflict_count": len(p["conflicts"]),
                         "tasks": [
                             serial(t)
-                            for t in s.scalars(
-                                select(Task).where(Task.event_id == ev.id)
-                            )
+                            for t in context["tasks"].get(ev.id,[])
                         ],
                         "venue": p["venue"],
                     }
@@ -386,8 +390,11 @@ def create_app(engine=None, static_dir=None, demo_enabled=None):
             selected=events(start=start,end=(upper+timedelta(days=1)).isoformat(),person=person,venue=venue,production=production,equipment=equipment,department=department,kind=kind,q=q)
             if len(selected)>500:raise ValueError('Слишком много событий: сократите период экспорта')
             with Session() as s:
-                for event in selected:event['export_plan']=saved_event_plan(s,s.get(Event,event['id']))
-                resources=list(s.scalars(select(Resource)))
+                from .engine import calendar_context
+                export_events={ev.id:ev for ev in s.scalars(select(Event).where(Event.id.in_([row['id'] for row in selected])))}
+                context=calendar_context(s,list(export_events.values())) if export_events else None
+                for event in selected:event['export_plan']=saved_event_plan(s,export_events[event['id']],context)
+                resources=list(context['resources'].values()) if context else list(s.scalars(select(Resource)))
                 blocks=[]
                 if not production and not kind and not q:
                     for booking in s.scalars(select(Booking).where(Booking.event_id.is_(None),Booking.start<datetime.combine(upper+timedelta(days=1),datetime.min.time()),Booking.end>datetime.combine(lower,datetime.min.time()))):
@@ -776,6 +783,7 @@ def create_app(engine=None, static_dir=None, demo_enabled=None):
                 p.name = name
             if not isinstance(body.get("data",{}),dict):raise ValueError("Паспорт постановки должен быть объектом")
             data = {**p.data, **body.get("data", {})}
+            if p.data.get("afisha_incomplete") and "duration" in body.get("data",{}):data["afisha_incomplete"]=False
             from .production_editor import validate_production
             p.data = validate_production(s, data)
             p.version += 1

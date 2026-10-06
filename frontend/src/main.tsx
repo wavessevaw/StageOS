@@ -1,3 +1,5 @@
+import {ImportedEvent} from './ImportedEvent';
+import {productionColor} from './productionColor';
 import {MobileApp} from "./MobileApp";
 import {apiFetch} from "./NetworkFetch";
 import QualificationManager from "./QualificationManager";
@@ -262,8 +264,8 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
       setError(ru(e.message));
     }
   }
-  useEffect(()=>{if(!account)return;let stopped=false;let seen:number|undefined;
-    const poll=async()=>{try{const next=await api('/sync');if(stopped)return;if(seen!==undefined&&seen!==next.revision){await load();setRevision(v=>v+1)}seen=next.revision}catch{}};
+  useEffect(()=>{if(!account)return;let stopped=false,pending=false;let seen:number|undefined;
+    const poll=async()=>{if(pending||document.hidden)return;pending=true;try{const next=await api('/sync');if(stopped)return;if(seen!==undefined&&seen!==next.revision){await load();setRevision(v=>v+1)}seen=next.revision}catch{}finally{pending=false}};
     poll();const timer=setInterval(poll,30000);return()=>{stopped=true;clearInterval(timer)};
   },[account?.theatre.id]);
   useEffect(() => {
@@ -289,7 +291,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
     }
   }, [toast]);
   useEffect(() => {
-    if (!boot?.initialized || !form.production_id || !form.venue_id) return;
+    if (page!=="Назначить" || !boot?.initialized || !form.production_id || !form.venue_id) return;
     let cancelled = false;
     setLive(null);
     if (form.kind === "Репетиция" && form.rehearsal_people?.length === 0)
@@ -309,7 +311,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
       cancelled = true;
       clearTimeout(t);
     };
-  }, [form, boot?.initialized]);
+  }, [form, boot?.initialized, page]);
   useEffect(() => {
     if (!boot?.initialized && page !== "Настройки") return;
     let cancelled = false;
@@ -602,7 +604,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
     );
   }
   function planContent(p: Obj) {
-    if(p.needs_plan)return <p className="notice">{tr("Событие добавлено из афиши. Производственный план и назначения сотрудников не заполнены. Окончание в календаре условное: 15 минут после начала. Заполните паспорт постановки и нажмите «Заполнить производственный план».")}</p>;
+    if(p.needs_plan)return <ImportedEvent plan={p} resources={resources} onPassport={id=>{setDetail(null);go("Постановки");setSelected(productions.find(x=>x.id===id)||null);setTab("Люди")}}/>;
     return (
       <>
         <div className="metrics">
@@ -896,7 +898,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
           )))}
         </nav>
         <div className="sidebar-bottom">
-          <DatabaseLocation/><small>StageOS · 1.0.13</small>
+          <DatabaseLocation/><small>StageOS · 1.0.14</small>
         </div>
       </aside>
       <main>
@@ -1548,6 +1550,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
                       slotDuration="00:30:00"
                       nowIndicator
                       eventDidMount={(arg) => {
+                        arg.el.title = arg.event.title;
                         arg.el.dataset.eventId = arg.event.id;
                         arg.el.dataset.start = arg.event.start
                           ? local(arg.event.start)
@@ -1556,6 +1559,8 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
                       selectable
                       editable
                       eventResizableFromStart={false}
+                      eventMinHeight={40}
+                      eventShortHeight={40}
                       datesSet={(arg) => {
                         const d =
                           arg.view.type === "timeGridDay"
@@ -1573,12 +1578,8 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
                             (e.health === "CONFLICT" ? " ⚠" : ""),
                           start: e.start,
                           end: e.end,
-                          color:
-                            e.health === "CONFLICT"
-                              ? "#bc716a"
-                              : e.kind === "Репетиция"
-                                ? "#7975ad"
-                                : "#2c8477",
+                          color: productionColor(e.production_id),
+                          classNames: [e.kind === "Репетиция" ? "calendar-rehearsal" : "calendar-performance", ...(e.health === "CONFLICT" ? ["calendar-conflict"] : [])],
                           durationEditable: true,
                           extendedProps: { event: e },
                         })),
@@ -1726,7 +1727,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
                           setTab("Люди");
                         }}
                       >
-                        <div className={"poster poster" + i}>
+                        <div className="poster" style={{background:productionColor(p.id)}}>
                           <span>{tr("СЦЕНА / ")}{tr(String(i + 1).padStart(2, "0"))}</span>
                           <div className="poster-orbit" />
                           <b>{ru(p.name)}</b>
@@ -1735,12 +1736,12 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
                           <span>{tr(p.data.genre)}</span>
                           <h3>{ru(p.name)}</h3>
                           <p>
-                            {tr(p.data.duration)}{tr(" мин")}{tr(" ")}
-                            <span>{p.data.source_metadata?.technical_passport_complete===false?tr("Подготовка не указана"):<>{tr("Подготовка ")}{tr(Math.floor(p.data.preparation / 60))}{tr(":")}{tr(String(p.data.preparation % 60).padStart(2, "0"))}</>}
+                            {p.data.afisha_incomplete?tr("Продолжительность не указана"):<>{tr(p.data.duration)}{tr(" мин")}</>}{tr(" ")}
+                            <span>{(p.data.afisha_incomplete || p.data.source_metadata?.technical_passport_complete===false)?tr("Подготовка не указана"):<>{tr("Подготовка ")}{tr(Math.floor(p.data.preparation / 60))}{tr(":")}{tr(String(p.data.preparation % 60).padStart(2, "0"))}</>}
                             </span>
                           </p>
                           <div>
-                            <Badge value={p.data.source_metadata?.technical_passport_complete===false?"Паспорт требует заполнения":"Активна"} />
+                            <Badge value={(p.data.afisha_incomplete || p.data.source_metadata?.technical_passport_complete===false)?"Паспорт требует заполнения":"Активна"} />
                             <small>
                               {ru(resource(p.data.home_venue)?.name)}
                             </small>
@@ -2744,7 +2745,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
                 </div>
                 <h2>{detail.title}</h2>
                 <p>
-                  {tr(date(detail.start))}{tr(" · ")}{tr(time(detail.start))}{tr("–")}{tr(time(detail.end))}{tr(" ")}{tr("· ")}{tr(detail.current.venue)}
+                  {tr(date(detail.start))}{tr(" · ")}{tr(time(detail.start))}{tr("–")}{tr(time(detail.current.end || detail.end))}{tr(" ")}{tr("· ")}{tr(detail.current.venue)}
                 </p>
               </div>
               <button className="icon" onClick={() => setDetail(null)}>

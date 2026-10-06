@@ -223,6 +223,8 @@ def create_workspace_app(home=None,static_dir=None,bootstrap_file=None):
     if bootstrap_file is None:bootstrap_file=home/'bootstrap-accounts.json'
     r=Registry(home,static_dir,bootstrap_file);app=FastAPI(title='StageOS Accounts',docs_url=None,redoc_url=None,openapi_url=None);app.state.registry=r
     app.add_middleware(TenantDispatch,registry=r)
+    from starlette.middleware.gzip import GZipMiddleware
+    app.add_middleware(GZipMiddleware,minimum_size=2048,compresslevel=4)
     from .mobile import install_mobile_routes
     install_mobile_routes(app,r)
 

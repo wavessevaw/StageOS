@@ -59,7 +59,7 @@ class LanAccess:
             return await self.app(scope, receive, send)
         req = Request(scope)
         if req.url.path == '/api/network/hello' and req.method == 'GET':
-            return await JSONResponse({'product':'StageOS Server','version':'1.0.13','protocol':PROTOCOL,'server_id':self.server_id})(scope, receive, send)
+            return await JSONResponse({'product':'StageOS Server','version':'1.0.14','protocol':PROTOCOL,'server_id':self.server_id})(scope, receive, send)
         if req.url.path.startswith('/api'):
             if req.url.path.startswith('/api/connection'):
                 return await JSONResponse({'detail':'Управление подключением доступно только на компьютере сервера'},403,headers={'X-StageOS-Web':'1'})(scope,receive,send)
@@ -271,7 +271,7 @@ class ConnectionDispatch:
                 response=await client.request(req.method,address+scope['path']+('?' + scope['query_string'].decode() if scope['query_string'] else ''),headers=headers,content=await req.body())
             if response.headers.get('X-StageOS-Disconnected')=='1' and response.status_code==403:
                 return await JSONResponse({'detail':'Код подключения изменён. Настройте подключение заново.'},403,headers={'X-StageOS-Disconnected':'1'})(scope,receive,send)
-            if response.status_code in {502,503,504} or response.headers.get('X-StageOS-Disconnected')=='1':
+            if (response.status_code in {502,503,504} and not scope['path'].startswith('/api/settings/llm/')) or response.headers.get('X-StageOS-Disconnected')=='1':
                 raise httpx.ConnectError('Server disconnected')
             outgoing=Response(response.content,status_code=response.status_code)
             outgoing.raw_headers=[(k,v) for k,v in response.headers.raw if k.lower() not in (b'content-length',b'transfer-encoding',b'content-encoding',b'connection')]

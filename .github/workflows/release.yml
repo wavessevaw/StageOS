@@ -59,7 +59,7 @@ jobs:
           fi
           gh release create "$tag" release-assets/* \
             --target "$GITHUB_SHA" \
-            --title "StageOS $version — автоимпорт афиши, устойчивое подключение и журнал входов" \
+            --title "StageOS $version — афиша, календарь и стабильность веб-подключения" \
             --notes-file "docs/releases/$version.md" \
             --draft
           gh release edit "$tag" --draft=false

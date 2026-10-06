@@ -107,7 +107,7 @@ def issue(code, resource, reason, severity="ERROR", **kw):
     }
 
 
-def compatibility(s, p, v, adapt=True):
+def compatibility(s, p, v, adapt=True, resources=None):
     req = dict(p.data["requirements"])
     ov = p.data.get("overrides", {}).get(str(v.id)) if adapt else None
     if ov:
@@ -144,8 +144,8 @@ def compatibility(s, p, v, adapt=True):
             }[k]
             available = sum(
                 1
-                for r in s.scalars(select(Resource).where(Resource.kind == kind))
-                if r.data.get("venue_id") == v.id
+                for r in (resources.values() if resources is not None else s.scalars(select(Resource).where(Resource.kind == kind)))
+                if r.kind == kind and r.data.get("venue_id") == v.id
                 and not r.data.get("retired",False)
                 and r.status not in ["maintenance", "broken"]
             )
@@ -330,26 +330,25 @@ def pipeline(p, v, start, duration, rehearsal=False):
     }
 
 
-def availability(s, resources, bookings, venue_id, event_id=None, meal_breaks=()):
+def availability(s, resources, bookings, venue_id, event_id=None, meal_breaks=(), candidates=None):
     first = min(b["start"] for b in bookings.values())
     last = max(b["end"] for b in bookings.values())
     horizon = timedelta(minutes=max([240] + [x.data.get("travel",0) for x in resources.values() if x.kind == "Venue"]))
     conflicts = []
-    allbookings = list(
-        s.scalars(
-            select(Booking).where(
-                Booking.end > first - horizon,
-                Booking.start < last + horizon,
-            )
-        )
-    )
+    allbookings = list(s.scalars(select(Booking).where(Booking.end>first-horizon,Booking.start<last+horizon))) if candidates is None else [b for b in candidates if b.end>first-horizon and b.start<last+horizon]
+    by_resource={}
+    for old in allbookings:by_resource.setdefault(old.resource_id,[]).append(old)
+    other_events={}
+    def other_event(eid):
+        if eid not in other_events:other_events[eid]=s.get(Event,eid)
+        return other_events[eid]
     for rid, b in bookings.items():
         obj = resources[rid]
         if obj.kind == "Room":
             parent=resources.get(obj.data.get("venue_id"))
             if parent and parent.status in ["maintenance","broken"]:
                 conflicts.append(issue("resource_status",parent.name,"Площадка помещения недоступна",resource_id=parent.id))
-            for block in allbookings:
+            for block in by_resource.get(obj.data.get("venue_id"),[]):
                 if block.event_id is None and block.resource_id == obj.data.get("venue_id") and max(block.start,b["start"])<min(block.end,b["end"]):
                     conflicts.append(issue(block.state,obj.name,"Площадка помещения: "+block.label,resource_id=rid,busy=[block.start.isoformat(),block.end.isoformat()],required=[b["start"].isoformat(),b["end"].isoformat()]))
         if obj.status in ["maintenance", "broken"] or obj.data.get("retired"):
@@ -371,14 +370,14 @@ def availability(s, resources, bookings, venue_id, event_id=None, meal_breaks=()
                     resource_id=rid,
                 )
             )
-        for old in allbookings:
+        for old in by_resource.get(rid,[]):
             if old.resource_id != rid or (
                 event_id is not None and old.event_id == event_id
             ):
                 continue
             overlap = max(old.start, b["start"]) < min(old.end, b["end"])
             if overlap:
-                other = s.get(Event, old.event_id) if old.event_id else None
+                other = other_event(old.event_id) if old.event_id else None
                 conflicts.append(
                     issue(
                         "overlap" if old.event_id else old.state,
@@ -397,7 +396,7 @@ def availability(s, resources, bookings, venue_id, event_id=None, meal_breaks=()
                     )
                 )
             elif old.event_id and obj.kind in ["Person", "Equipment", "Vehicle"]:
-                other = s.get(Event, old.event_id)
+                other = other_event(old.event_id)
                 if other and other.venue_id != venue_id:
                     travel = max(
                         resources[venue_id].data.get("travel", 0),
@@ -956,28 +955,35 @@ def substitutions(s, r):
         else None,
     }
 
-def saved_event_plan(s, ev):
+def saved_event_plan(s, ev, context=None):
     """Display committed assignments/tasks; recheck current resource availability only."""
     plan = deepcopy(ev.data['plan'])
     req = {**ev.data['request'], 'event_id':ev.id, 'version':ev.version}
     if req.get('duration') is not None:
         req['duration'] = int((ev.end-ev.start).total_seconds()/60)
     plan['request'] = req
-    if plan.get('needs_plan'):return plan
-    resources = {x.id:x for x in s.scalars(select(Resource))}
-    stored = list(s.scalars(select(Booking).where(Booking.event_id==ev.id)))
+    if plan.get('needs_plan'):
+        from .afisha import empty_plan
+        imported=empty_plan(ev,req,context['resources'][ev.venue_id] if context else s.get(Resource,ev.venue_id),context['productions'][ev.production_id] if context else s.get(Production,ev.production_id))
+        if ev.status!='Draft':
+            imported['end']=ev.end.isoformat()
+            imported['estimated_end']=plan.get('estimated_end',True)
+            imported['duration_minutes']=int((ev.end-ev.start).total_seconds()/60)
+        return imported
+    resources = context['resources'] if context else {x.id:x for x in s.scalars(select(Resource))}
+    stored = context['bookings'].get(ev.id,[]) if context else list(s.scalars(select(Booking).where(Booking.event_id==ev.id)))
     bs = {b.resource_id:dict(resource_id=b.resource_id,start=b.start,end=b.end,label=b.label) for b in stored}
     dynamic = {'overlap','travel','resource_status','limited_use','long_shift','absence','maintenance','vacation','sick','training','unavailable'}
     conflicts = [c for c in plan['conflicts'] if c['code'] not in dynamic and 'busy' not in c]
     meals = [(datetime.fromisoformat(t['start']), datetime.fromisoformat(t['end'])) for t in plan['tasks'] if t['name'] == 'Обед']
-    if bs: conflicts.extend(availability(s,resources,bs,ev.venue_id,ev.id,meals))
+    if bs: conflicts.extend(availability(s,resources,bs,ev.venue_id,ev.id,meals,context['candidates'] if context else None))
     snapshot = plan.get('production_snapshot')
-    current = s.get(Production,ev.production_id)
+    current = context['productions'][ev.production_id] if context else s.get(Production,ev.production_id)
     plan['passport_changed'] = bool(snapshot and snapshot != current.data)
     if snapshot and ev.kind!='Репетиция':
         production = Production(id=current.id,name=ev.title,data=snapshot)
         venue=resources[ev.venue_id]
-        comp=compatibility(s,production,venue,req.get('adaptation',True))
+        comp=compatibility(s,production,venue,req.get('adaptation',True),resources)
         old_codes={c['code'] for c in plan['compatibility']['conflicts']}
         conflicts=[c for c in conflicts if c['code'] not in old_codes]
         conflicts.extend(comp['conflicts']);plan['compatibility']=comp
@@ -1012,6 +1018,23 @@ def saved_event_plan(s, ev):
             conflicts.append(issue('moving_bar_count',venue.name,'Назначенные штанкеты не обеспечивают нужное движение','CRITICAL'))
     plan['conflicts']=conflicts
     plan['status']='CONFLICT' if any(c['severity'] in ['ERROR','CRITICAL'] for c in conflicts) else 'WARNING' if conflicts else 'READY'
-    plan['tasks']=[{'name':t.name,'department':t.department,'start':t.start.isoformat(),'end':t.end.isoformat()} for t in s.scalars(select(Task).where(Task.event_id==ev.id).order_by(Task.start))]
+    plan['tasks']=[{'name':t.name,'department':t.department,'start':t.start.isoformat(),'end':t.end.isoformat()} for t in (context['tasks'].get(ev.id,[]) if context else s.scalars(select(Task).where(Task.event_id==ev.id).order_by(Task.start)))]
     plan['title']=ev.title
     return plan
+
+
+def calendar_context(s,events):
+    """Fresh request-scoped data shared by calendar rows; never cached across writes."""
+    ids=[e.id for e in events]
+    resources={r.id:r for r in s.scalars(select(Resource))}
+    productions={p.id:p for p in s.scalars(select(Production).where(Production.id.in_({e.production_id for e in events})))}
+    bookings={};tasks={}
+    rows=list(s.scalars(select(Booking).where(Booking.event_id.in_(ids))))
+    for row in rows:bookings.setdefault(row.event_id,[]).append(row)
+    for row in s.scalars(select(Task).where(Task.event_id.in_(ids)).order_by(Task.start)):tasks.setdefault(row.event_id,[]).append(row)
+    if rows:
+        horizon=timedelta(minutes=max([240]+[r.data.get('travel',0) for r in resources.values() if r.kind=='Venue']))
+        lower=min(r.start for r in rows)-horizon;upper=max(r.end for r in rows)+horizon
+        candidates=list(s.scalars(select(Booking).where(Booking.end>lower,Booking.start<upper)))
+    else:candidates=[]
+    return dict(resources=resources,productions=productions,bookings=bookings,tasks=tasks,candidates=candidates)

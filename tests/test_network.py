@@ -289,3 +289,16 @@ def test_windows_scripts_create_and_inspect_real_rule():
         assert isinstance(result['profiles'],list)
     finally:
         subprocess.run(['powershell.exe','-NoProfile','-Command',f'Remove-NetFirewallRule -Name StageOS-Server-{port} -ErrorAction SilentlyContinue'],capture_output=True,timeout=30)
+
+
+def test_optional_model_error_does_not_disconnect_server_session(network,monkeypatch):
+    from fastapi import HTTPException
+    host,local,(client,_),tid,address,code=network
+    tenant=host.state.network.workspace.state.registry.tenant(tid)
+    route=next(r for r in tenant.routes if getattr(r,'path',None)=='/api/settings/llm/test')
+    async def failed_model():raise HTTPException(502,'Модель вернула пустой ответ')
+    monkeypatch.setattr(route.dependant,'call',failed_model)
+    response=client.post('/api/settings/llm/test')
+    assert response.status_code==502 and response.json()['detail']=='Модель вернула пустой ответ'
+    assert 'X-StageOS-Reconnecting' not in response.headers
+    assert client.get('/api/bootstrap').status_code==200
