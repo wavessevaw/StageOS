@@ -85,6 +85,7 @@ def test_local_select_and_remote_management_denied(network):
 
 def test_cloudflare_origin_validation_preserves_login(network):
  host,local,clients,tid,address,code=network
+ host.state.network.tunnel.select('cloudflare')
  agent=host.state.network.tunnel.providers['cloudflare'];agent.update(url='https://owned.trycloudflare.com',phase='connected',verified=True)
  headers={'X-StageOS-Code':code,'Origin':'https://owned.trycloudflare.com'}
  response=httpx.post(address+'/api/auth/login',headers=headers,json={'theatre_id':tid,'login':'Админ','password':'test-password'})
