@@ -633,10 +633,10 @@ def preview(s, r: Request, production_data=None):
         book(rid,first,last,item.name)
         if item.kind=='Scenery' and (item.data.get('width',0)>v.data.get('width',0) or item.data.get('height',0)>v.data.get('height',0) or item.data.get('depth',0)>v.data.get('depth',0)):
             conflicts.append(issue('scenery',item.name,'Декорация не помещается на сцене','CRITICAL'))
+    for dept, ids in cast_people(p.data,"crew",r.cast).items():
+        for rid in ids:
+            assign(rid, f"{dept} · техник", dept, first if dept == "Транспорт" else techstart, last if dept == "Транспорт" else techend)
     if not rehearsal:
-        for dept, ids in cast_people(p.data,"crew",r.cast).items():
-            for rid in ids:
-                assign(rid, f"{dept} · техник", dept, first if dept == "Транспорт" else techstart, last if dept == "Транспорт" else techend)
         for kitid in (
             r.equipment_kits
             if r.equipment_kits is not None

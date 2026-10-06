@@ -38,6 +38,9 @@ def test_rehearsal_calls_sound_responsible_and_respects_explicit_selection(ctx):
     plan=c.post('/api/preview',json=rehearsal).json()
     assert sound in {a['actual_id'] for a in plan['assignments']}
     assert sound in {bk['resource_id'] for bk in plan['bookings']}
+    crew=b['productions'][0]['data']['crew'].get('Звук',[])
+    assert set(crew)<={a['actual_id'] for a in plan['assignments']}
+    assert set(crew)<={bk['resource_id'] for bk in plan['bookings']}
     actor=next(a['actual_id'] for a in plan['assignments'] if a['department']=='Артисты')
     selected=c.post('/api/preview',json={**rehearsal,'rehearsal_people':[actor]}).json()
     assert sound not in {a['actual_id'] for a in selected['assignments']}
