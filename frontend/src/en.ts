@@ -604,3 +604,16 @@ Object.assign(english, {
   "Выберите действие туннеля": "Choose a tunnel action",
   "Туннель ещё завершает проверку. Повторите позже": "The tunnel is still finishing a check. Try again later"
 });
+
+Object.assign(english, {
+  "Художественный руководитель": "Artistic director",
+  "Причина согласования конфликтного назначения": "Reason for approving a conflicting appointment",
+  "Подтвердить с сохранением критических конфликтов": "Confirm while retaining critical conflicts",
+  "Обоснование решения администратора или художественного руководителя": "Reason for the administrator or artistic director decision",
+  "Ожидает согласования администратора или художественного руководителя": "Awaiting approval from the administrator or artistic director",
+  "Серьёзные конфликты требуют согласования администратора или художественного руководителя. Отправьте план на согласование.": "Serious conflicts require approval from the administrator or artistic director. Submit the plan for approval.",
+  "Согласование доступно администратору или художественному руководителю": "Only the administrator or artistic director can approve proposals",
+  "Подтверждение конфликтов доступно администратору или художественному руководителю": "Only the administrator or artistic director can confirm conflicts",
+  "Серьёзные конфликты требуют согласования администратора или художественного руководителя": "Serious conflicts require approval from the administrator or artistic director",
+  "Администратор: все права. Художественный руководитель: назначение спектаклей и согласование конфликтов. Планировщик: полное составление постановок и расписания; серьёзные конфликты — через согласование. Наблюдатель: просмотр.": "Administrator: all permissions. Artistic director: scheduling performances and approving conflicts. Planner: full production and schedule editing; serious conflicts require approval. Viewer: read only."
+});

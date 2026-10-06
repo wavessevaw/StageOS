@@ -56,7 +56,7 @@ class LanAccess:
             return await self.app(scope, receive, send)
         req = Request(scope)
         if req.url.path == '/api/network/hello' and req.method == 'GET':
-            return await JSONResponse({'product':'StageOS Server','version':'1.0.10','protocol':PROTOCOL,'server_id':self.server_id})(scope, receive, send)
+            return await JSONResponse({'product':'StageOS Server','version':'1.0.11','protocol':PROTOCOL,'server_id':self.server_id})(scope, receive, send)
         if req.url.path.startswith('/api'):
             if req.url.path.startswith('/api/connection'):
                 return await JSONResponse({'detail':'Управление подключением доступно только на компьютере сервера'},403)(scope,receive,send)

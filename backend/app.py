@@ -84,7 +84,7 @@ def create_app(engine=None, static_dir=None, demo_enabled=None):
     with engine.begin() as connection:
         cfg.attributes["connection"] = connection
         command.upgrade(cfg, "head")
-    app = FastAPI(title="StageOS", version="1.0.10")
+    app = FastAPI(title="StageOS", version="1.0.11")
     app.state.Session = Session
 
     @app.middleware("http")
@@ -286,7 +286,7 @@ def create_app(engine=None, static_dir=None, demo_enabled=None):
             return preview(s, r)
 
     @app.post("/api/events")
-    def confirm(body: Confirm):
+    def confirm(body: Confirm, http_request: HttpRequest):
         with LOCK, Session.begin() as s:
             if engine.dialect.name == "sqlite":
                 s.execute(text("BEGIN IMMEDIATE"))
@@ -295,6 +295,9 @@ def create_app(engine=None, static_dir=None, demo_enabled=None):
                 raise HTTPException(
                     409, "Данные изменились. Выполните проверку повторно"
                 )
+            actor = getattr(http_request.state, 'actor', None)
+            if actor and actor['role'] not in {'admin', 'artistic_director'} and any(c['severity'] in {'ERROR','CRITICAL'} for c in plan['conflicts']):
+                raise HTTPException(403, 'Серьёзные конфликты требуют согласования администратора или художественного руководителя')
             ev = save_plan(s, body.request, plan)
             return serial(ev)
 
@@ -481,7 +484,7 @@ def create_app(engine=None, static_dir=None, demo_enabled=None):
             return serial(a)
 
     @app.post("/api/proposals/{aid}/approve")
-    def approve(aid: int):
+    def approve(aid: int, http_request: HttpRequest, body: dict | None = None):
         with LOCK, Session.begin() as s:
             if engine.dialect.name == "sqlite":s.execute(text("BEGIN IMMEDIATE"))
             a = s.get(Audit, aid)
@@ -493,8 +496,15 @@ def create_app(engine=None, static_dir=None, demo_enabled=None):
                 raise HTTPException(
                     409, "Условия изменились, требуется новое предложение"
                 )
+            body = body or {}
+            reason = body.get('reason', r.override_reason)
+            force = body.get('force', r.force)
+            if not isinstance(reason, str) or not isinstance(force, bool):
+                raise HTTPException(422, 'Укажите причину и подтверждение критических конфликтов')
+            r = r.model_copy(update={'override_reason': reason[:2000].strip(), 'force': force})
+            p = preview(s, r)
             ev = save_plan(s, r, p)
-            a.data = {**a.data, "state": "Approved"}
+            a.data = {**a.data, "state": "Approved", "reason": r.override_reason, "decision_by": getattr(http_request.state, 'actor', None), "approved_plan": p}
             return serial(ev)
 
     @app.post("/api/proposals/{aid}/reject")

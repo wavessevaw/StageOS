@@ -36,6 +36,7 @@ import {
 } from "lucide-react";
 import "./style.css";
 import {AccountGate,AccountMenu} from "./Accounts";
+import {ApprovalActions} from "./ApprovalActions";
 import {DatabaseLocation} from "./Connection";
 import PassportEditor from "./PassportEditor";
 import VenueEditor from "./VenueEditor";
@@ -112,6 +113,8 @@ function newEventForm(f: Obj): Obj {
   return { ...f, event_id: undefined, version: undefined, replacements: {}, role_assignments:{}, removed_tasks:[], extra_tasks:[], task_overrides: {}, force: false, override_reason: "", notes: "" };
 }
 function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
+  const canApprove = !account || ["admin", "artistic_director"].includes(account.user.role);
+  const canEdit = !account || account.user.role !== "viewer";
   const language=useLanguage();
   const languageLoaded=useRef(false);
   const changeLanguage=async(value:Language)=>{
@@ -425,7 +428,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
   async function save(proposal = false) {
     if (!preview || preview.demo_scenario) return;
     await run(async () => {
-      const req = { ...preview.request, override_reason: override };
+      const req = { ...preview.request, override_reason: canApprove ? override : "", force: canApprove && !!preview.request.force };
       const p = await api("/preview", "POST", req);
       const reviewed = (plan: Obj) => {
         const copy = JSON.parse(JSON.stringify(plan));
@@ -886,7 +889,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
           )))}
         </nav>
         <div className="sidebar-bottom">
-          <DatabaseLocation/><small>StageOS · 1.0.10</small>
+          <DatabaseLocation/><small>StageOS · 1.0.11</small>
         </div>
       </aside>
       <main>
@@ -2451,35 +2454,17 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
                           </p>
                           <button onClick={() => setPreview(n.data.plan)}>{tr("Посмотреть предложение")}</button>
                           {tr(n.data.reason && <p>{tr(ru(n.data.reason))}</p>)}
-                          {tr(n.data.state === "Pending Approval" && (
-                            <button
-                              onClick={() =>
-                                run(async () => {
-                                  await api(
-                                    "/proposals/" + n.id + "/reject",
-                                    "POST",
-                                    { reason: "Отклонено пользователем" },
-                                  );
-                                  setRevision((x) => x + 1);
-                                  setToast("Предложение отклонено");
-                                })
-                              }
-                            >{tr("Отклонить")}</button>
-                          ))}
-                          {tr(n.data.state === "Pending Approval" && (
-                            <button
-                              onClick={() =>
-                                run(async () => {
-                                  await api(
-                                    "/proposals/" + n.id + "/approve",
-                                    "POST",
-                                  );
-                                  setRevision((x) => x + 1);
-                                  setToast("Предложение согласовано");
-                                })
-                              }
-                            >{tr("Согласовать")}</button>
-                          ))}
+                          {n.data.state === "Pending Approval" && (canApprove ? (
+                            <ApprovalActions plan={n.data.plan} busy={busy}
+                              reject={() => run(async () => {
+                                await api("/proposals/" + n.id + "/reject", "POST", {reason: "Отклонено пользователем"});
+                                setRevision(x => x + 1); setToast("Предложение отклонено");
+                              })}
+                              approve={body => run(async () => {
+                                await api("/proposals/" + n.id + "/approve", "POST", body);
+                                setRevision(x => x + 1); setToast("Предложение согласовано");
+                              })}/>
+                          ) : <p className="notice">{tr("Ожидает согласования администратора или художественного руководителя")}</p>)}
                         </>
                       ) : (
                         <p>
@@ -2649,7 +2634,8 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
                 <p className="notice">{tr("Демонстрационный сценарий: ")}{ru(preview.demo_scenario.name)}{tr(". Изменения изолированы и не сохраняются.")}</p>
               )}
               {tr(planContent(preview))}
-              {tr(!preview.demo_scenario && (
+              {!canApprove && preview.conflicts.some((c:Obj) => ["ERROR", "CRITICAL"].includes(c.severity)) && <p className="notice">{tr("Серьёзные конфликты требуют согласования администратора или художественного руководителя. Отправьте план на согласование.")}</p>}
+              {tr(!preview.demo_scenario && canApprove && (
                 <label className="row">
                   <input
                     type="checkbox"
@@ -2660,9 +2646,9 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
                     }
                   />{tr("Назначить принудительно с сохранением конфликтов")}</label>
               ))}
-              {tr((preview.status === "CONFLICT" || preview.request.force) && (
+              {tr(canApprove && (preview.status === "CONFLICT" || preview.request.force) && (
                 <label className="field">
-                  <span>{tr("Обоснование ручного решения администратора")}</span>
+                  <span>{tr("Обоснование решения администратора или художественного руководителя")}</span>
                   <textarea
                     value={override}
                     onChange={(e) => setOverride(e.target.value)}
@@ -2710,11 +2696,13 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
                       })
                     }
                   >{tr("Замены техники")}</button>
-                  <button disabled={busy} onClick={() => save(true)}>{tr("На согласование")}</button>
+                  <button disabled={busy || !canEdit} onClick={() => save(true)}>{tr("На согласование")}</button>
                   <button
                     className="primary"
                     disabled={
                       busy ||
+                      !canEdit ||
+                      (!canApprove && preview.conflicts.some((c:Obj) => ["ERROR", "CRITICAL"].includes(c.severity))) ||
                       (!preview.request.force &&
                         preview.conflicts.some(
                           (c: Obj) => c.severity === "CRITICAL",

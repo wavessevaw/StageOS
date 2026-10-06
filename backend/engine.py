@@ -801,7 +801,7 @@ def save_plan(s, r, result, allow_demo=False):
             raise ValueError("Физическая несовместимость: назначение запрещено")
         if (r.force or result["status"] == "CONFLICT") and len(r.override_reason.strip()) < 12:
             raise ValueError(
-                "Конфликты требуют обоснования администратора (минимум 12 символов)"
+                "Конфликты требуют обоснования администратора или художественного руководителя (минимум 12 символов)"
             )
     old = s.get(Event, r.event_id) if r.event_id else None
     if r.event_id and not old:

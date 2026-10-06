@@ -11,7 +11,8 @@ from sqlalchemy import select
 from .models import make_engine, Setting, Resource, Production
 from .app import create_app
 
-ROLES={'admin':'Администратор','editor':'Планировщик','viewer':'Наблюдатель'}
+ROLES={'admin':'Администратор','artistic_director':'Художественный руководитель','editor':'Планировщик','viewer':'Наблюдатель'}
+DECISION_ROLES={'admin','artistic_director'}
 COOKIE='stageos_session'
 ITERATIONS=600000
 
@@ -149,15 +150,17 @@ class TenantDispatch:
                 read_only.add(path)
             if method not in ['GET','HEAD'] and path not in read_only and path!='/api/settings/interface':
                 if u['role']=='viewer':raise HTTPException(403,'Доступ только для просмотра')
-                if u['role']!='admin' and (path.startswith('/api/database/') or path.startswith('/api/settings/') or path.endswith('/approve') or path.endswith('/reject')):
+                if u['role']!='admin' and (path.startswith('/api/database/') or path.startswith('/api/settings/')):
                     raise HTTPException(403,'Требуются права администратора')
+                if u['role'] not in DECISION_ROLES and (path.endswith('/approve') or path.endswith('/reject')):
+                    raise HTTPException(403,'Согласование доступно администратору или художественному руководителю')
             # Editors cannot bypass conflicts; inspect body and replay it to tenant API.
-            if method in ['POST','PATCH','PUT'] and u['role']!='admin':
+            if method in ['POST','PATCH','PUT'] and u['role'] not in DECISION_ROLES:
                 raw=await req.body()
                 try:body=json.loads(raw or b'{}')
                 except ValueError:body={}
                 command=body.get('request',body) if isinstance(body,dict) else {}
-                if isinstance(command,dict) and (command.get('force') or command.get('override_reason') or (path.endswith('/status') and command.get('status')=='Approved')):raise HTTPException(403,'Принудительное назначение доступно администратору')
+                if isinstance(command,dict) and (command.get('force') or command.get('override_reason') or (path.endswith('/status') and command.get('status')=='Approved')):raise HTTPException(403,'Подтверждение конфликтов доступно администратору или художественному руководителю')
                 sent=False
                 async def replay():
                     nonlocal sent
@@ -170,6 +173,7 @@ class TenantDispatch:
                 nonlocal status
                 if message['type']=='http.response.start':status=message['status']
                 await send(message)
+            scope.setdefault('state',{})['actor']={k:u[k] for k in ['id','name','login','role']}
             tenant=self.r.tenant(u['theatre_id'])
             # Serialize writes across LAN and local host event loops. Recompute preview
             # and commit inside the same critical section; stale versions still fail.
