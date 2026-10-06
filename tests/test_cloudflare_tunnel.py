@@ -90,3 +90,28 @@ def test_cloudflare_origin_validation_preserves_login(network):
  response=httpx.post(address+'/api/auth/login',headers=headers,json={'theatre_id':tid,'login':'Админ','password':'test-password'})
  assert response.status_code==200
  headers['Origin']='https://evil.example';assert httpx.post(address+'/api/auth/login',headers=headers,json={}).status_code==403
+
+@pytest.mark.parametrize('identity,addresses,expected', [('owned-id',['104.16.230.132'],True),('other',['104.16.230.132'],False),('owned-id',['127.0.0.1'],False)])
+def test_quic_protected_dns_preserves_tls_identity(tmp_path,monkeypatch,identity,addresses,expected):
+ t=make(tmp_path);t.protocol='quic';calls=[]
+ monkeypatch.setattr('backend.cloudflare_tunnel.NgrokTunnel.verify',Mock(side_effect=httpx.ConnectError('DNS failure')))
+ def resolve(*args,**kwargs):
+  assert args[0]=='https://cloudflare-dns.com/dns-query'
+  return httpx.Response(200,request=httpx.Request('GET',args[0]),json={'Answer':[{'type':1,'data':a} for a in addresses]})
+ monkeypatch.setattr('backend.cloudflare_tunnel.httpx.get',resolve)
+ class Client:
+  def __enter__(self):return self
+  def __exit__(self,*args):pass
+  def get(self,url,**kwargs):
+   assert kwargs['extensions']['sni_hostname']=='owned.trycloudflare.com'
+   assert kwargs['headers']['Host']=='owned.trycloudflare.com'
+   calls.append((url,dict(kwargs['headers'])))
+   value={'product':'StageOS Server','protocol':1,'server_id':identity} if url.endswith('/hello') else {'theatres':[]}
+   return httpx.Response(200,request=httpx.Request('GET',url),json=value)
+ def factory(**kwargs):
+  assert kwargs.get('verify',True) is True
+  return Client()
+ monkeypatch.setattr('backend.cloudflare_tunnel.httpx.Client',factory)
+ assert t.verify('https://owned.trycloudflare.com') is expected
+ if calls:assert 'X-StageOS-Code' not in calls[0][1]
+ assert len(calls)==(2 if expected else (0 if addresses==['127.0.0.1'] else 1))

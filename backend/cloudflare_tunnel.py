@@ -1,5 +1,6 @@
 """Owned Quick Tunnel, pinned download and server identity verification."""
 import hashlib
+import ipaddress
 import json
 import os
 from pathlib import Path
@@ -112,7 +113,8 @@ class CloudflareTunnel(NgrokTunnel):
                      '--no-autoupdate', '--protocol', protocol,
                      '--metrics', f'127.0.0.1:{metrics_port}',
                      '--http-host-header', f'127.0.0.1:{port}',
-                     '--url', f'http://127.0.0.1:{port}'],
+                     '--url', f'http://127.0.0.1:{port}'] + (['--edge', 'region1.v2.argotunnel.com:7844',
+                     '--edge', 'region2.v2.argotunnel.com:7844'] if protocol == 'quic' else []),
                     env=env, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                     stderr=subprocess.PIPE, text=True, encoding='utf-8', errors='replace',
                     creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
@@ -129,6 +131,42 @@ class CloudflareTunnel(NgrokTunnel):
                 args=(self.process, self.stop_event), daemon=True)
             self.reader.start()
             self.worker.start()
+
+    def verify(self, url):
+        url = public_address(url)
+        try:
+            return super().verify(url)
+        except httpx.ConnectError:
+            if self.protocol != 'quic':
+                raise
+        # Resolve only this public tunnel through authenticated HTTPS. Preserve
+        # certificate validation against its original hostname, and check server
+        # identity before sending the connection code. No system DNS changes.
+        hostname = urlsplit(url).hostname
+        response = httpx.get('https://cloudflare-dns.com/dns-query',
+            params={'name': hostname, 'type': 'A'},
+            headers={'Accept': 'application/dns-json'}, timeout=8, trust_env=False)
+        response.raise_for_status()
+        addresses = [a['data'] for a in response.json().get('Answer', []) if a.get('type') == 1]
+        with httpx.Client(timeout=8, follow_redirects=False, trust_env=False) as client:
+            for address in addresses[:4]:
+                if not ipaddress.ip_address(address).is_global:
+                    continue
+                root = 'https://' + address
+                options = {'headers': {'Host': hostname}, 'extensions': {'sni_hostname': hostname}}
+                try:
+                    hello = client.get(root + '/api/network/hello', **options)
+                    hello.raise_for_status()
+                    data = hello.json()
+                    if (data.get('product') != 'StageOS Server' or data.get('protocol') != 1
+                            or data.get('server_id') != self.network.server_id):
+                        return False
+                    options['headers']['X-StageOS-Code'] = self.network.config['code']
+                    access = client.get(root + '/api/auth/theatres', **options)
+                    return access.status_code == 200 and isinstance(access.json().get('theatres'), list)
+                except httpx.HTTPError:
+                    continue
+        return False
 
     def read_output(self, process, stop_event):
         try:
