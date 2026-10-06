@@ -379,6 +379,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
     }
     setPage(p);
     setVenueEditor(null);
+    setPassport(null);
     setSelected(null);
     setFind("");
     setCatalogDept("");
@@ -879,7 +880,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
         <div className="theatre">
           <span className="avatar">{tr("Т")}</span>
           <div>
-            {boot?.theatre_name || (boot?.demo_enabled ? "Демо театр" : "Рабочий театр")}<small>{tr("Локальное пространство")}</small>
+            {boot?.theatre_name || (boot?.demo_enabled ? "Демо театр" : "Рабочий театр")}<small>{tr("Рабочее пространство")}</small>
           </div>
           <span className="online" />
         </div>
@@ -1135,7 +1136,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
                   <h3>{tr("Всё под контролем")}</h3>
                   <span className="muted">
                     {tr(live
-                      ? "Проверено по локальной базе"
+                      ? "Проверено по базе театра"
                       : "Проверяем доступность…")}
                   </span>
                 </div>
@@ -2619,6 +2620,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
           <section
             className="modal preview-modal"
             role="dialog"
+            aria-modal="true"
             aria-label={tr("Предварительный план")}
             onClick={(e) => e.stopPropagation()}
           >
@@ -2735,6 +2737,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
           <section
             className="modal detail-modal"
             role="dialog"
+            aria-modal="true"
             aria-label={tr("Карточка события")}
             onClick={(e) => e.stopPropagation()}
           >
