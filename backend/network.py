@@ -25,6 +25,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
 from .workspaces import create_workspace_app
 from .tunnel import TunnelController, HEADERS
+from .mobile import PATHS as MOBILE_PATHS, current_mobile, COOKIE as MOBILE_COOKIE
 
 PROTOCOL = 1
 
@@ -42,6 +43,8 @@ def validate_address(value):
             raise ValueError()
     except ValueError:
         raise ValueError('Неверный порт сервера')
+    if parts.scheme=='http' and any(parts.hostname.lower().endswith(suffix) for suffix in ('.ngrok-free.dev','.ngrok-free.app','.ngrok.app','.ngrok.io')) and parts.port in (None,80,443):
+        return 'https://' + parts.hostname
     return value
 
 class LanAccess:
@@ -56,12 +59,12 @@ class LanAccess:
             return await self.app(scope, receive, send)
         req = Request(scope)
         if req.url.path == '/api/network/hello' and req.method == 'GET':
-            return await JSONResponse({'product':'StageOS Server','version':'1.0.11','protocol':PROTOCOL,'server_id':self.server_id})(scope, receive, send)
+            return await JSONResponse({'product':'StageOS Server','version':'1.0.12','protocol':PROTOCOL,'server_id':self.server_id})(scope, receive, send)
         if req.url.path.startswith('/api'):
             if req.url.path.startswith('/api/connection'):
-                return await JSONResponse({'detail':'Управление подключением доступно только на компьютере сервера'},403)(scope,receive,send)
-            if not secrets.compare_digest(req.headers.get('x-stageos-code','').encode(), self.code.encode()):
-                return await JSONResponse({'detail':'Неверный код подключения к серверу'},403)(scope,receive,send)
+                return await JSONResponse({'detail':'Управление подключением доступно только на компьютере сервера'},403,headers={'X-StageOS-Web':'1'})(scope,receive,send)
+            if req.url.path not in MOBILE_PATHS and not secrets.compare_digest(req.headers.get('x-stageos-code','').encode(), self.code.encode()):
+                return await JSONResponse({'detail':'Неверный код подключения к серверу'},403,headers={'X-StageOS-Disconnected':'1'})(scope,receive,send)
             if req.url.path in ('/api/auth/theatres',) and req.method == 'POST' or req.url.path.endswith('/setup'):
                 return await JSONResponse({'detail':'Создание театра и первый администратор доступны на компьютере сервера'},403)(scope,receive,send)
             if self.on_request:self.on_request(scope.get('client',('unknown',0))[0])
@@ -118,9 +121,10 @@ class NetworkController:
 
     def observe_user(self,req):
         registry=self.workspace.state.registry
-        try:user=registry.current(req)
+        cookie=MOBILE_COOKIE if req.url.path in MOBILE_PATHS else 'stageos_session'
+        try:user=current_mobile(registry,req) if cookie==MOBILE_COOKIE else registry.current(req)
         except HTTPException:return
-        key=hashlib.sha256(req.cookies.get('stageos_session','').encode()).hexdigest()
+        key=hashlib.sha256(req.cookies.get(cookie,'').encode()).hexdigest()
         now=time.time()
         with self.log_lock:
             # Store only identifiers/timestamps, never passwords, cookies or session tokens.
@@ -254,13 +258,18 @@ class ConnectionDispatch:
         headers={k:v for k,v in req.headers.items() if k.lower() in ('content-type','cookie','accept','if-none-match')}
         headers.update({'X-StageOS-Code':code,**HEADERS})
         try:
-            async with httpx.AsyncClient(timeout=120,follow_redirects=False,trust_env=False) as client:
+            timeout = 8 if scope['path'] in {'/api/auth/session','/api/mobile/session'} else 120
+            async with httpx.AsyncClient(timeout=timeout,follow_redirects=False,trust_env=False) as client:
                 response=await client.request(req.method,address+scope['path']+('?' + scope['query_string'].decode() if scope['query_string'] else ''),headers=headers,content=await req.body())
+            if response.status_code in {502,503,504} or response.headers.get('X-StageOS-Disconnected')=='1':
+                raise httpx.ConnectError('Server disconnected')
             outgoing=Response(response.content,status_code=response.status_code)
             outgoing.raw_headers=[(k,v) for k,v in response.headers.raw if k.lower() not in (b'content-length',b'transfer-encoding',b'content-encoding',b'connection')]
             return await outgoing(scope,receive,send)
         except httpx.HTTPError:
-            return await JSONResponse({'detail':'Сервер недоступен. Проверьте сеть и запущен ли StageOS Server. Изменения не сохранены.'},503)(scope,receive,send)
+            outgoing=JSONResponse({'detail':'Сервер недоступен. Проверьте сеть и запущен ли StageOS Server. Изменения не сохранены.'},503,headers={'X-StageOS-Disconnected':'1'})
+            outgoing.delete_cookie('stageos_session',path='/api')
+            return await outgoing(scope,receive,send)
 
 def create_desktop_app(home=None,static_dir=None,bootstrap_file=None):
     home=Path(home or os.environ.get('STAGEOS_HOME',Path(os.environ.get('LOCALAPPDATA',Path.home()/'.local/share'))/'StageOS-Work'))
@@ -303,7 +312,10 @@ def create_desktop_app(home=None,static_dir=None,bootstrap_file=None):
                 if not isinstance(code,str) or not 8 <= len(code) <= 128 or not code.isascii():raise ValueError('Укажите код подключения к серверу')
                 # Probe before switching; a wrong code must never replace a working connection.
                 async with httpx.AsyncClient(timeout=10,trust_env=False,headers=HEADERS) as client:
-                    hello=await client.get(address+'/api/network/hello');hello.raise_for_status()
+                    hello=await client.get(address+'/api/network/hello')
+                    if hello.status_code in {301,302,307,308}:
+                        raise ValueError('Адрес перенаправляет подключение. Используйте проверенный HTTPS-адрес из окна туннеля сервера.')
+                    hello.raise_for_status()
                     if hello.json().get('protocol')!=PROTOCOL or hello.json().get('product')!='StageOS Server':raise ValueError('Это не совместимый StageOS Server')
                     check=await client.get(address+'/api/auth/theatres',headers={'X-StageOS-Code':code});check.raise_for_status()
                 await anyio.to_thread.run_sync(lambda:controller.set_mode(mode,address=address,code=code))

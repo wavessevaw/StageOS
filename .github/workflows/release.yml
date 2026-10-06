@@ -59,8 +59,9 @@ jobs:
           fi
           gh release create "$tag" release-assets/* \
             --target "$GITHUB_SHA" \
-            --title "StageOS $version — роли и согласование конфликтов" \
+            --title "StageOS $version — личное расписание на телефоне и веб-вход" \
             --notes-file "docs/releases/$version.md" \
             --draft
           gh release edit "$tag" --draft=false
           gh release view "$tag" --json url,assets,isDraft,isPrerelease
+

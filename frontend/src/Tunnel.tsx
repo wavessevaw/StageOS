@@ -1,3 +1,4 @@
+import {apiFetch} from "./NetworkFetch";
 import React,{useState} from 'react';
 import {tr} from './i18n';
 type Obj=Record<string,any>;
@@ -6,13 +7,14 @@ export function Tunnel({state,onUpdate}:{state:Obj,onUpdate:(s:Obj)=>void}){
  const t=state.tunnel||{};
  const labels:Obj={stopped:'Интернет-туннель остановлен',installing:'Загрузка ngrok…',starting:'Проверяем внешний адрес…',connected:'Интернет-туннель подключён',disconnected:'Нет связи через интернет-туннель',error:'Ошибка интернет-туннеля'};
  async function action(action:string){setBusy(true);setError('');const submitted=action==='start'?token:'';if(action==='start')setToken('');try{
-  const r=await fetch('/api/connection/tunnel',{method:'POST',headers:{'Content-Type':'application/json','X-StageOS-Token':sessionStorage.getItem('stageos-token')||''},body:JSON.stringify({action,...(action==='start'?{authtoken:submitted,remember}:{})})});
+  const r=await apiFetch('/api/connection/tunnel',{method:'POST',headers:{'Content-Type':'application/json','X-StageOS-Token':sessionStorage.getItem('stageos-token')||''},body:JSON.stringify({action,...(action==='start'?{authtoken:submitted,remember}:{})})});
   const value=await r.json();if(!r.ok)throw Error(typeof value.detail==='string'?value.detail:'Проверьте настройки подключения');onUpdate(value);
  }catch(e:any){setError(e.message)}finally{setBusy(false)}}
  const allowed=state.can_manage_tunnel&&!busy&&state.running;
  const active=['starting','connected','disconnected'].includes(t.phase);
  return <div className="server-tunnel"><h3>{tr('Доступ через Интернет')}</h3>
  <p>{tr('ngrok выступает посредником между клиентами и вашим ПК. База остаётся на компьютере сервера. Нужен аккаунт ngrok и его Authtoken.')}</p>
+ <p className="muted">{tr('Если ngrok недоступен в вашей сети, включите работающий VPN на компьютере сервера до запуска туннеля. VPN должен обслуживать приложения Windows, а не только браузер. Если внешний адрес недоступен клиенту, VPN может потребоваться и на клиенте.')}</p>
  <p><a href="https://dashboard.ngrok.com/get-started/your-authtoken" target="_blank" rel="noreferrer">{tr('Открыть аккаунт ngrok')}</a></p>
  <strong role="status">{tr(labels[t.phase]||labels.stopped)}</strong>
  {t.checked_at&&<small className="server-checked">{tr('Последняя проверка')}: {new Date(t.checked_at).toLocaleTimeString()}</small>}

@@ -56,6 +56,8 @@ def test_two_clients_share_database_notifications_export_and_restart(network,tmp
 def test_code_origin_roles_and_host_control(network):
     host,local,(a,b),tid,address,code=network
     assert httpx.get(address+'/api/bootstrap',trust_env=False).status_code==403
+    web=httpx.get(address+'/api/connection',trust_env=False)
+    assert web.status_code==403 and web.headers['X-StageOS-Web']=='1'
     assert httpx.get(address+'/api/auth/theatres',trust_env=False,headers={'X-StageOS-Code':'wrong-code'}).status_code==403
     assert httpx.get(address+'/api/auth/theatres',trust_env=False,headers={'X-StageOS-Code':code}).status_code==200
     assert httpx.post(address+'/api/auth/theatres',trust_env=False,headers={'X-StageOS-Code':code},json={}).status_code==403
@@ -96,7 +98,10 @@ def test_server_loss_and_bad_connection_do_not_copy_or_write(network):
     assert a.post('/api/connection',json={'mode':'client','address':address,'code':'неверный-код'}).status_code==422
     assert a.get('/api/connection').json()['address']==saved['address']
     host.state.network.stop_server()
-    assert a.get('/api/bootstrap').status_code==503
+    disconnected=a.get('/api/bootstrap')
+    assert disconnected.status_code==503
+    assert disconnected.headers['X-StageOS-Disconnected']=='1'
+    assert 'stageos_session' not in a.cookies
     assert a.post('/api/resources',json={'kind':'Person','name':'Не сохранён'}).status_code==503
     assert local.get('/api/bootstrap').json()['resources']==[]
     assert a.post('/api/connection',json={'mode':'local'}).status_code==200
@@ -109,9 +114,29 @@ def test_server_loss_and_bad_connection_do_not_copy_or_write(network):
         assert native.status()['running']
     finally:native.stop_server()
 
+def test_connection_loss_requires_login_after_server_returns(network):
+    host,local,(a,b),tid,address,code=network
+    host.state.network.stop_server()
+    response=a.get('/api/auth/session')
+    assert response.status_code==503
+    assert response.headers['X-StageOS-Disconnected']=='1'
+    assert 'stageos_session' not in a.cookies
+    host.state.network.start_server(int(address.rsplit(':',1)[1]))
+    assert a.get('/api/auth/session').status_code==401
+    assert login(a,tid).status_code==200
+    assert a.get('/api/bootstrap').status_code==200
+    assert local.get('/api/bootstrap').status_code==200
+
 @pytest.mark.parametrize('address',['ftp://host','http://user:pass@host','http://host/path','http://host:bad','http://host?token=abc'])
 def test_bad_address(address):
     with pytest.raises(ValueError):validate_address(address)
+
+@pytest.mark.parametrize('suffix',['ngrok-free.dev','ngrok-free.app','ngrok.app','ngrok.io'])
+def test_public_ngrok_address_uses_https(suffix):
+    assert validate_address('http://stageos-test.'+suffix)=='https://stageos-test.'+suffix
+    assert validate_address('stageos-test.'+suffix)=='https://stageos-test.'+suffix
+    assert validate_address('http://192.168.1.10:8765')=='http://192.168.1.10:8765'
+    assert validate_address('http://other-ngrok-free.dev.example')=='http://other-ngrok-free.dev.example'
 
 
 def test_invalid_connection_configuration_and_origin(tmp_path,monkeypatch):

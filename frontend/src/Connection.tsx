@@ -1,18 +1,20 @@
+import {apiFetch} from "./NetworkFetch";
 import React,{useEffect,useRef,useState} from 'react';
 import {tr,message} from './i18n';
 import {Tunnel} from './Tunnel';
 type Obj=Record<string,any>;
 const headers=()=>({'Content-Type':'application/json','X-StageOS-Token':sessionStorage.getItem('stageos-token')||''});
 async function request(path:string,method='GET',body?:Obj){
- const r=await fetch('/api/connection'+path,{method,headers:headers(),body:body?JSON.stringify(body):undefined});
+ const r=await apiFetch('/api/connection'+path,{method,headers:headers(),body:body?JSON.stringify(body):undefined});
  if(r.status===404)return null;
+ if(r.status===403 && r.headers.get('X-StageOS-Web')==='1' && method==='GET' && path==='')return {mode:'web',enabled:true,running:true,address:location.origin};
  const value=await r.json();if(!r.ok)throw Error(typeof value.detail==='string'?value.detail:tr('Проверьте настройки подключения'));return value;
 }
 export async function connectionApi(method='GET',body?:Obj){return request('',method,body)}
 export function DatabaseLocation(){
  const [mode,setMode]=useState('unknown');
  useEffect(()=>{let active=true;const poll=async()=>{try{const s=await connectionApi();if(active)setMode(s?.mode||'local')}catch{if(active)setMode('unavailable')}};void poll();const id=setInterval(poll,3000);return()=>{active=false;clearInterval(id)}},[]);
- const labels:Obj={local:'Локальная база данных',client:'База на сервере',server:'Общая база · этот сервер',unknown:'Проверяем подключение…',unavailable:'Нет связи с ядром'};
+ const labels:Obj={local:'Локальная база данных',client:'База на сервере',web:'База на сервере',server:'Общая база · этот сервер',unknown:'Проверяем подключение…',unavailable:'Нет связи с ядром'};
  return <><span className={'online'+(['unknown','unavailable'].includes(mode)?' connection-unknown':'')}/><span className="database-location">{tr(labels[mode]||labels.unknown)}</span></>;
 }
 export function ServerIndicator(){
@@ -53,7 +55,7 @@ export function Connection({initial,onClose}:{initial:Obj,onClose:()=>void}){
  {error&&<p role="alert" className="error-banner">{tr(error)}</p>}{state.error&&<p role="alert" className="error-banner">{state.error}</p>}
  {notice&&<p role="status" className="server-notice">{tr(notice)}</p>}
  <form onSubmit={apply}>
- {mode==='client'&&<><label className="field"><span>{tr('Адрес сервера')}</span><input required placeholder="192.168.1.10:8765" value={address} onChange={e=>setAddress(e.target.value)}/></label><label className="field"><span>{tr('Код подключения')}</span><input required autoComplete="off" value={code} onChange={e=>setCode(e.target.value)}/></label><p className="muted">{tr('Получите адрес и код у администратора. Затем войдите своим логином и паролем.')}</p></>}
+ {mode==='client'&&<><label className="field"><span>{tr('Адрес сервера')}</span><input required placeholder="192.168.1.10:8765" value={address} onChange={e=>setAddress(e.target.value)}/></label><label className="field"><span>{tr('Код подключения')}</span><input required autoComplete="off" value={code} onChange={e=>setCode(e.target.value)}/></label><p className="muted">{tr('Получите адрес и код у администратора. Затем войдите своим логином и паролем.')}</p><p className="muted">{tr("Адрес 192.168… работает только в одной локальной сети. Для хотспота или другой сети используйте внешний HTTPS-адрес из окна туннеля на сервере.")}</p></>}
  {mode==='server'&&<>
  <div className="server-checks"><div><small>{tr('Ответ сервера')}</small><strong>{tr(d.http_ok===true?'HTTP: отвечает':d.http_ok===false?'HTTP: нет ответа':'Не проверено')}</strong></div><div><small>{tr('Брандмауэр Windows')}</small><strong>{tr(state.firewall_state==='pending'?'Настройка выполняется…':fw)}</strong></div><div><small>{tr('Тип сети Windows')}</small><strong>{profiles.length?profiles.map(p=>`${p.interface}: ${tr(p.category==='Private'?'Частная':p.category==='Public'?'Общедоступная':'Доменная')}`).join(' · '):tr('Не проверено')}</strong></div></div>
  <button type="button" disabled={checking||!!busy} onClick={inspect}>{tr(checking?'Проверяем…':'Проверить состояние')}</button>

@@ -84,7 +84,7 @@ def create_app(engine=None, static_dir=None, demo_enabled=None):
     with engine.begin() as connection:
         cfg.attributes["connection"] = connection
         command.upgrade(cfg, "head")
-    app = FastAPI(title="StageOS", version="1.0.11")
+    app = FastAPI(title="StageOS", version="1.0.12")
     app.state.Session = Session
 
     @app.middleware("http")

@@ -1,3 +1,4 @@
+import {apiFetch} from "./NetworkFetch";
 import { tr } from "./i18n";
 import React, {useState} from 'react';
 import { saveFile } from './saveFile';
@@ -16,7 +17,7 @@ export default function ScheduleExport({date,filters,onClose,locale='ru'}:{date:
       <button className="primary" disabled={busy || !start || !end || end<start} onClick={async()=>{
         setBusy(true);setError('');setResult('');try{
           const params=new URLSearchParams(Object.entries({...filters,start,end,format,locale,include_people:people,include_tasks:tasks,include_notes:notes}).filter(([,v])=>v!=='' && v!=null).map(([k,v])=>[k,String(v)]));
-          const response=await fetch('/api/schedule/export?'+params,{headers:{'X-StageOS-Token':sessionStorage.getItem('stageos-token') || ''}});
+          const response=await apiFetch('/api/schedule/export?'+params,{headers:{'X-StageOS-Token':sessionStorage.getItem('stageos-token') || ''}});
           if(!response.ok){const data=await response.json();throw new Error(typeof data.detail==='string'?data.detail:'Не удалось экспортировать расписание');}
           const filename=response.headers.get('Content-Disposition')?.match(/filename="([^"]+)"/)?.[1] || `StageOS-schedule.${format}`;
           setResult(await saveFile(await response.blob(), filename));

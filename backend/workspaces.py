@@ -117,7 +117,7 @@ class Registry:
     def current(self,req):
         token=req.cookies.get(COOKIE,'');key=hashlib.sha256(token.encode()).hexdigest()
         entry=self.sessions.get(key)
-        if not entry or entry['expires']<time.time():raise HTTPException(401,'Войдите в аккаунт театра')
+        if not entry or entry['expires']<time.time() or entry.get('kind','desktop')!='desktop':raise HTTPException(401,'Войдите в аккаунт театра')
         with self.db() as d:u=d.execute('SELECT * FROM users WHERE id=? AND active=1',(entry['user_id'],)).fetchone()
         if not u:self.sessions.pop(key,None);raise HTTPException(401,'Аккаунт отключён')
         return dict(u)
@@ -128,6 +128,24 @@ class Registry:
         if body.role not in ROLES or not normalized(body.login) or not body.name.strip():raise HTTPException(422,'Укажите имя, логин и допустимую роль')
         try:d.execute('INSERT INTO users VALUES(?,?,?,?,?,?,1)',(secrets.token_hex(16),tid,body.name.strip(),normalized(body.login),password_hash(body.password),body.role))
         except sqlite3.IntegrityError:raise HTTPException(409,'Этот логин уже используется в театре')
+
+    def authenticate(self,body,req,cookie=COOKIE,kind='desktop'):
+        self.theatre(body.theatre_id);key=(body.theatre_id,normalized(body.login));now=time.time()
+        with self.lock:
+            attempts=self.attempts.get(key,[]);attempts=[x for x in attempts if x>now-60]
+            if len(attempts)>=5:raise HTTPException(429,'Слишком много попыток. Повторите через минуту')
+            with self.db() as d:u=d.execute('SELECT * FROM users WHERE theatre_id=? AND login=? AND active=1',key).fetchone()
+            encoded=u['password'] if u else self.dummy_hash
+            if not password_matches(body.password,encoded):self.attempts[key]=attempts+[now];raise HTTPException(401,'Неверный логин или пароль')
+            self.attempts.pop(key,None)
+            # A successful account switch replaces this browser's old session only.
+            previous=req.cookies.get(cookie,'')
+            if previous:self.sessions.pop(hashlib.sha256(previous.encode()).hexdigest(),None)
+            token=secrets.token_urlsafe(32);self.sessions[hashlib.sha256(token.encode()).hexdigest()]={'user_id':u['id'],'expires':now+12*3600,'kind':kind}
+            with self.db() as d:self.audit(d,u['id'],body.theatre_id,'Вход в аккаунт')
+        result=JSONResponse({'user':self.public_user(u),'theatre':{'id':body.theatre_id,'name':self.theatre(body.theatre_id)['name']}})
+        result.set_cookie(cookie,token,httponly=True,samesite='strict',path='/api');return result
+
 
 class TenantDispatch:
     def __init__(self,app,registry):self.app=app;self.r=registry
@@ -140,7 +158,7 @@ class TenantDispatch:
         origin=req.headers.get('origin')
         if origin and origin not in [str(req.base_url).rstrip('/'),'http://localhost:5173','http://127.0.0.1:5173']:
             return await JSONResponse({'detail':'Источник запроса запрещён'},403)(scope,receive,send)
-        if path.startswith('/api/auth/') or path=='/api/sync':return await self.app(scope,receive,send)
+        if path.startswith('/api/auth/') or path.startswith('/api/mobile/') or path=='/api/sync':return await self.app(scope,receive,send)
         try:
             u=self.r.current(req);method=req.method
             if u['role']!='admin' and (path.startswith('/api/database/') or path.startswith('/api/settings/llm') or path=='/api/diagnostics'):raise HTTPException(403,'Требуются права администратора')
@@ -200,6 +218,8 @@ def create_workspace_app(home=None,static_dir=None,bootstrap_file=None):
     if bootstrap_file is None:bootstrap_file=home/'bootstrap-accounts.json'
     r=Registry(home,static_dir,bootstrap_file);app=FastAPI(title='StageOS Accounts',docs_url=None,redoc_url=None,openapi_url=None);app.state.registry=r
     app.add_middleware(TenantDispatch,registry=r)
+    from .mobile import install_mobile_routes
+    install_mobile_routes(app,r)
 
     @app.exception_handler(ValueError)
     async def invalid(_,error):
@@ -246,21 +266,7 @@ def create_workspace_app(home=None,static_dir=None,bootstrap_file=None):
 
     @app.post('/api/auth/login')
     def login(body:LoginBody,req:Request):
-        r.theatre(body.theatre_id);key=(body.theatre_id,normalized(body.login));now=time.time()
-        with r.lock:
-            attempts=r.attempts.get(key,[]);attempts=[x for x in attempts if x>now-60]
-            if len(attempts)>=5:raise HTTPException(429,'Слишком много попыток. Повторите через минуту')
-            with r.db() as d:u=d.execute('SELECT * FROM users WHERE theatre_id=? AND login=? AND active=1',key).fetchone()
-            encoded=u['password'] if u else r.dummy_hash
-            if not password_matches(body.password,encoded):r.attempts[key]=attempts+[now];raise HTTPException(401,'Неверный логин или пароль')
-            r.attempts.pop(key,None)
-            # A successful account switch replaces this browser's old session only.
-            previous=req.cookies.get(COOKIE,'')
-            if previous:r.sessions.pop(hashlib.sha256(previous.encode()).hexdigest(),None)
-            token=secrets.token_urlsafe(32);r.sessions[hashlib.sha256(token.encode()).hexdigest()]={'user_id':u['id'],'expires':now+12*3600}
-            with r.db() as d:r.audit(d,u['id'],body.theatre_id,'Вход в аккаунт')
-        result=JSONResponse({'user':r.public_user(u),'theatre':{'id':body.theatre_id,'name':r.theatre(body.theatre_id)['name']}})
-        result.set_cookie(COOKIE,token,httponly=True,samesite='strict',path='/api');return result
+        return r.authenticate(body,req)
 
     @app.post('/api/auth/logout')
     def logout(req:Request):

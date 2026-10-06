@@ -70,6 +70,7 @@ class Request(BaseModel):
     rehearsal_people: list[StrictInt] | None = None
     rehearsal_items: list[StrictInt] = Field(default_factory=list)
     run_through: bool = False
+    baseline_plan: bool = False
     task_overrides: dict[str, TaskTiming] = Field(default_factory=dict)
     removed_tasks: list[str] = Field(default_factory=list,max_length=50)
     extra_tasks: list[ExtraTask] = Field(default_factory=list,max_length=50)
@@ -462,13 +463,7 @@ def preview(s, r: Request, production_data=None):
     if any(k not in {str(i) for i in range(len(p.data['roles']))} or v<=0 for k,v in r.role_assignments.items()):
         raise ValueError('Неизвестная роль или неверный исполнитель события')
     rehearsal = r.kind == "Репетиция"
-    duration = (
-        r.duration
-        if rehearsal and r.duration
-        else 120
-        if rehearsal
-        else p.data["duration"]
-    )
+    duration = r.duration if r.duration is not None else 120 if rehearsal else p.data['duration']
     if any(i < 0 or i >= len(p.data["scenes"]) for i in r.scenes):
         raise ValueError("Неизвестная сцена")
     comp = (
@@ -483,7 +478,10 @@ def preview(s, r: Request, production_data=None):
         else compatibility(s, p, v, r.adaptation)
     )
     tasks, solver = pipeline(p, v, r.start, duration, rehearsal)
-    if r.run_through and not rehearsal:
+    if r.baseline_plan and not rehearsal:
+        from .day_plan import baseline
+        tasks = baseline(tasks, r.start, duration, r.run_through)
+    elif r.run_through and not rehearsal:
         morning = r.start.replace(hour=11, minute=0)
         prep, _ = pipeline(p, v, morning, duration)
         tasks = [t for t in prep if t['name'] not in ['Спектакль','Демонтаж','Возврат']] + [t for t in tasks if t['name'] in ['Спектакль','Демонтаж','Возврат']]
@@ -494,7 +492,7 @@ def preview(s, r: Request, production_data=None):
         ]
     from .timing import customize, retime
     tasks, dependencies = customize(tasks,r.removed_tasks,r.extra_tasks)
-    if r.task_overrides or r.run_through or r.removed_tasks or r.extra_tasks:
+    if r.task_overrides or r.run_through or r.baseline_plan or r.removed_tasks or r.extra_tasks:
         overrides={**{t.name:TaskTiming(start=t.start,duration=t.duration) for t in r.extra_tasks},**r.task_overrides}
         tasks, solver = retime(tasks,overrides,r.start,r.run_through,dependencies)
     performance_call = min([t['start'] for t in tasks if t['name']=='Прогон'] or [r.start])
@@ -951,6 +949,8 @@ def saved_event_plan(s, ev):
     """Display committed assignments/tasks; recheck current resource availability only."""
     plan = deepcopy(ev.data['plan'])
     req = {**ev.data['request'], 'event_id':ev.id, 'version':ev.version}
+    if req.get('duration') is not None:
+        req['duration'] = int((ev.end-ev.start).total_seconds()/60)
     plan['request'] = req
     resources = {x.id:x for x in s.scalars(select(Resource))}
     stored = list(s.scalars(select(Booking).where(Booking.event_id==ev.id)))

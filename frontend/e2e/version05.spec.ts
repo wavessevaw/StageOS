@@ -26,6 +26,7 @@ test('Editable stages and individual event actors persist into calendar',async({
  await dialog.getByLabel('Начало нового этапа').fill('2027-01-19T18:20');
  await dialog.getByRole('button',{name:'Добавить в план и проверить'}).click();
  await expect(dialog.getByRole('button',{name:'Удалить этап Проверка реквизита',exact:true})).toBeVisible();
+ const reason=dialog.getByLabel('Обоснование решения администратора или художественного руководителя');if(await reason.count())await reason.fill('Ранний монтаж согласован с площадкой');
  await dialog.getByRole('button',{name:'Подтвердить',exact:true}).click();
  await expect(page.getByRole('heading',{name:'Календарь',exact:true})).toBeVisible();
  const card=page.locator('.fc-event[data-start="2027-01-19T19:00:00"]').first();await expect(card).toBeVisible();await card.click();

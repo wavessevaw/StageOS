@@ -54,6 +54,22 @@ test('StageOS Server → connect with code → sign in → shared changes refres
  await page.getByRole('button',{name:'Личный аккаунт'}).click();await page.getByRole('button',{name:'Выйти из аккаунта',exact:true}).click();await expect(page.getByRole('heading',{name:'Выберите театр'})).toBeVisible();expect((await host.request.get('/api/bootstrap')).ok()).toBeTruthy();
  await host.getByRole('button',{name:'Личный аккаунт'}).click();await host.getByRole('button',{name:'Подключение к серверу',exact:true}).click();await expect(host.getByText('Сервер работает',{exact:true})).toBeVisible();await host.screenshot({path:test.info().outputPath('server.png')});
  await expect(host.locator('.server-users')).toContainText('Активных сетевых пользователей нет');
+ // Drop the actual LAN listener while the client is signed in and idle.
+ expect((await page.request.post('/api/auth/login',{data:{theatre_id:tid,login:'admin',password:'test-password'}})).ok()).toBeTruthy();
+ await page.reload();await expect(page.getByRole('button',{name:'Календарь',exact:true})).toBeVisible();
+ expect((await host.request.post('/api/connection',{data:{mode:'local'}})).ok()).toBeTruthy();
+ await expect(page.getByRole('heading',{name:'Вход в аккаунт',exact:true})).toBeVisible({timeout:15000});
+ await expect(page.getByRole('button',{name:'Календарь',exact:true})).toHaveCount(0);
+ await expect(page.getByRole('alert')).toContainText('Связь с сервером потеряна');
+ await expect(page.getByLabel('Пароль',{exact:true})).toHaveValue('');
+ const restarted=await host.request.post('/api/connection',{data:{mode:'server',port:8885}});expect(restarted.ok()).toBeTruthy();
+ expect((await page.request.get('/api/auth/session')).status()).toBe(503); // the restarted host has a new connection code
+ await page.getByRole('button',{name:'Настроить подключение',exact:true}).click();
+ await page.getByLabel('Код подключения').fill((await restarted.json()).code);
+ await page.getByRole('button',{name:'Проверить и подключиться'}).click();
+ await page.getByRole('button').filter({hasText:'Общий театр'}).click();
+ await page.getByLabel('Логин',{exact:true}).fill('admin');await page.getByLabel('Пароль',{exact:true}).fill('test-password');
+ await page.getByRole('button',{name:'Войти',exact:true}).click();await expect(page.getByRole('button',{name:'Календарь',exact:true})).toBeVisible();
  expect(errors).toEqual([]);await hostContext.close();
 });
 test('Connection screen is translated into English',async({page})=>{await page.goto('/');await page.getByLabel('Язык приложения').selectOption('en');await page.getByRole('button',{name:'Configure connection'}).click();await expect(page.getByRole('heading',{name:'Connect to a shared database'})).toBeVisible();await expect(page.getByRole('button',{name:'Connect to a server',exact:true})).toBeVisible()});

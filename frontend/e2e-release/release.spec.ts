@@ -34,13 +34,21 @@ test('Empty working database → venue → employee → production → calendar 
  await expect(page.getByLabel('Название постановки')).not.toBeVisible();
  await page.getByRole('button',{name:/^Назначить/}).click();
  await page.getByLabel('Дата',{exact:true}).fill('2026-12-01');
+ await page.getByLabel('Начало',{exact:true}).fill('18:00');
+ await page.getByLabel('Общая продолжительность с антрактами, мин').fill('150');
  await page.getByRole('button',{name:'Проверить и назначить',exact:true}).click();
  const preview=page.getByRole('dialog',{name:'Предварительный план'});
- await expect(preview).toBeVisible();await preview.getByRole('button',{name:'Подтвердить',exact:true}).click();
+ await expect(preview).toBeVisible();
+ await expect(preview.getByLabel('Длительность Спектакль',{exact:true})).toBeEnabled();
+ await preview.getByLabel('Длительность Спектакль',{exact:true}).fill('200');
+ await preview.getByLabel('Длительность Спектакль',{exact:true}).blur();
+ await expect(preview.getByLabel('Длительность Спектакль',{exact:true})).toHaveValue('200');
+ await preview.getByRole('button',{name:'Подтвердить',exact:true}).click();
  await expect(page.getByRole('heading',{name:'Календарь',exact:true})).toBeVisible();
  await expect(page.locator('.fc-event').filter({hasText:'Моя первая постановка'})).toBeVisible();
  await page.reload();await page.getByRole('button',{name:'Календарь',exact:true}).click();
  const events=await (await request.get('/api/events')).json();expect(events).toHaveLength(1);
+ expect(events[0].end).toBe('2026-12-01T21:20:00');
  expect((await request.post('/api/demo')).status()).toBe(404);
  await page.getByRole('button',{name:'Настройки',exact:true}).click();
  await expect(page.getByText('24 демонстрационных конфликта',{exact:true})).toHaveCount(0);
@@ -50,7 +58,12 @@ test('Empty working database → venue → employee → production → calendar 
 test('Production view refreshes when filters change; absence respects department',async({page,request})=>{
  const boot=await (await request.get('/api/bootstrap')).json();
  const original=boot.productions[0];
- const second=await (await request.post('/api/productions',{data:{name:'Утренний спектакль',data:original.data}})).json();
+ // The default afternoon production now reserves the stage from the morning.
+ // Use a separate venue/cast for the independent filter-refresh scenario.
+ const venue=await (await request.post('/api/venues',{data:{name:'Утренняя площадка',data:{}}})).json();
+ const person=await (await request.post('/api/resources',{data:{name:'Утренний артист',kind:'Person',department:'Артисты',data:{qualification:['Артисты']}}})).json();
+ const data={...original.data,home_venue:venue.id,roles:original.data.roles.map((r:any)=>({...r,A:person.id,B:person.id,eligible:[person.id]}))};
+ const second=await (await request.post('/api/productions',{data:{name:'Утренний спектакль',data}})).json();
  const command={production_id:second.id,venue_id:second.data.home_venue,start:'2026-12-01T10:00:00'};
  const plan=await (await request.post('/api/preview',{data:command})).json();expect(plan.status).toBe('READY');
  expect((await request.post('/api/events',{data:{request:command,fingerprint:plan.fingerprint}})).ok()).toBeTruthy();

@@ -33,6 +33,8 @@ test.describe("StageOS integration", () => {
       dialog.getByText("Полная версия", { exact: true }),
     ).toBeVisible();
     await page.screenshot({ path: "../docs/02-preview.png" });
+    const reason=dialog.getByLabel("Обоснование решения администратора или художественного руководителя");
+    if(await reason.count())await reason.fill("Ранний монтаж согласован с площадкой");
     await dialog
       .getByRole("button", { name: "Подтвердить", exact: true })
       .click();

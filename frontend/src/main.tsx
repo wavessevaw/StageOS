@@ -1,3 +1,5 @@
+import {MobileApp} from "./MobileApp";
+import {apiFetch} from "./NetworkFetch";
 import QualificationManager from "./QualificationManager";
 import {HistorySuggestions,SmallModelSettings} from './Suggestions';
 import {CastProposal} from './CastProposal';
@@ -50,7 +52,7 @@ if (initialToken) {
   history.replaceState({}, "", location.pathname);
 }
 async function api(path: string, method = "GET", body?: any) {
-  const res = await fetch("/api" + path, {
+  const res = await apiFetch("/api" + path, {
     method,
     headers: {
       "Content-Type": "application/json",
@@ -110,7 +112,7 @@ function shiftedStart(req: Obj, start: string): Obj {
 }
 const today = local(new Date()).slice(0,10);
 function newEventForm(f: Obj): Obj {
-  return { ...f, event_id: undefined, version: undefined, replacements: {}, role_assignments:{}, removed_tasks:[], extra_tasks:[], task_overrides: {}, force: false, override_reason: "", notes: "" };
+  return { ...f, event_id: undefined, version: undefined, replacements: {}, role_assignments:{}, removed_tasks:[], extra_tasks:[], task_overrides: {}, baseline_plan:true, run_through:true, duration:undefined, force: false, override_reason: "", notes: "" };
 }
 function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
   const canApprove = !account || ["admin", "artistic_director"].includes(account.user.role);
@@ -131,8 +133,8 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
       venue_id: 0,
       kind: "Спектакль",
       cast: "B",
-      start: today + "T19:00:00",
-      duration: 120,
+      start: today + "T18:00:00",
+      duration: undefined, baseline_plan: true, run_through: true,
       adaptation: true,
       scenes: [],
       replacements: {},
@@ -378,7 +380,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
     if (p === "Добавить спектакль") newPassport();
   }
   function update(k: string, v: any) {
-    setForm((f) => k === "start" ? shiftedStart(f, v) : ({ ...f, [k]: v, ...(k === "kind"||k === "production_id" ? { task_overrides:{},removed_tasks:[],extra_tasks:[],role_assignments:{},replacements:{},run_through:false,rehearsal_people:null,rehearsal_items:[] } : k==="cast"?{role_assignments:{},replacements:{}}:{}) }));
+    setForm((f) => k === "start" ? shiftedStart(f, v) : ({ ...f, [k]: v, ...(k === "kind"||k === "production_id" ? { task_overrides:{},removed_tasks:[],extra_tasks:[],role_assignments:{},replacements:{},baseline_plan:true,run_through:true,duration:undefined,rehearsal_people:null,rehearsal_items:[] } : k==="cast"?{role_assignments:{},replacements:{}}:{}) }));
     setWindows([]);
   }
   async function run(fn: () => Promise<any>) {
@@ -395,7 +397,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
   }
   async function importDatabase(file: File) {
     await run(async () => {
-      const res = await fetch("/api/database/import", {
+      const res = await apiFetch("/api/database/import", {
         method: "POST",
         headers: {
           "X-StageOS-Token": sessionStorage.getItem("stageos-token") || "",
@@ -409,7 +411,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
   }
   async function exportDatabase() {
     await run(async () => {
-      const res = await fetch("/api/database/export", {
+      const res = await apiFetch("/api/database/export", {
         headers: {
           "X-StageOS-Token": sessionStorage.getItem("stageos-token") || "",
         },
@@ -747,9 +749,9 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
                       task_overrides: {}, removed_tasks:[], extra_tasks:[],
                     })
                   }
-                />{tr("Прогон в день спектакля: 11:00–14:00, обед, вечерний сбор")}</label>
+                />{tr("Базовый план: прогон, обед и сбор перед спектаклем")}</label>
             ))}
-            <p className="muted">{tr("Укажите дату и время каждого этапа, включая предыдущие дни. Измените начало или длительность этапа: зависимости и занятость пересчитываются. Время спектакля остаётся фиксированным. Явно заданные времена отмечены как закреплённые.")}</p>
+            <p className="muted">{tr("Укажите дату и время каждого этапа, включая предыдущие дни. Измените начало или длительность этапа: зависимости и занятость пересчитываются. Начало и общую продолжительность спектакля с антрактами можно изменить; занятость пересчитывается. Явно заданные времена отмечены как закреплённые.")}</p>
             <AddStage key={p.request.production_id+":"+p.start} plan={p} busy={busy} onChange={changes=>changePlan(p,changes)}/>
             <div key={p.fingerprint} className="schedule-editor">
               {p.tasks.map((t: Obj) => (
@@ -782,23 +784,23 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
                   <input
                     aria-label={"Длительность " + t.name}
                     type="number"
-                    min={t.name === "Репетиция" ? 15 : 1}
-                    max={t.name === "Репетиция" ? 480 : 10080}
+                    min={["Спектакль","Репетиция"].includes(t.name) ? 15 : 1}
+                    max={["Спектакль","Репетиция"].includes(t.name) ? 480 : 10080}
                     defaultValue={Math.round(
                       (+new Date(t.end) - +new Date(t.start)) / 60000,
                     )}
-                    disabled={busy || t.name === "Спектакль"}
+                    disabled={busy}
                     onBlur={(e) => {
                       const n = +e.target.value;
                       e.target.value=String(Math.round((+new Date(t.end)-+new Date(t.start))/60000));
                       if (
-                        Number.isInteger(n) && n >= (t.name === "Репетиция" ? 15 : 1) && n <= (t.name === "Репетиция" ? 480 : 10080) &&
+                        Number.isInteger(n) && n >= (["Спектакль","Репетиция"].includes(t.name) ? 15 : 1) && n <= (["Спектакль","Репетиция"].includes(t.name) ? 480 : 10080) &&
                         n !==
                           Math.round(
                             (+new Date(t.end) - +new Date(t.start)) / 60000,
                           )
                       ) {
-                        if (t.name === "Репетиция")
+                        if (["Спектакль","Репетиция"].includes(t.name))
                           changePlan(p, { duration: n });
                         else
                           changePlan(p, {
@@ -889,7 +891,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
           )))}
         </nav>
         <div className="sidebar-bottom">
-          <DatabaseLocation/><small>StageOS · 1.0.11</small>
+          <DatabaseLocation/><small>StageOS · 1.0.12</small>
         </div>
       </aside>
       <main>
@@ -1011,7 +1013,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
                           ...f,
                           production_id: +v,
                           replacements: {},
-                          role_assignments: {}, removed_tasks: [], extra_tasks: [], run_through:false,
+                          role_assignments: {}, removed_tasks: [], extra_tasks: [], baseline_plan:true, run_through:true, duration:undefined,
                           scenes: [],
                           task_overrides: {},
                           rehearsal_people: null,
@@ -1055,6 +1057,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
                       />
                     </label>
                   </div>
+                  {form.kind !== "Репетиция" && <label className="field"><span>{tr("Общая продолжительность с антрактами, мин")}</span><input type="number" min={15} max={480} value={form.duration ?? prod?.data.duration ?? 120} onChange={e=>update("duration",e.target.value ? +e.target.value : undefined)}/></label>}
                   {form.kind === "Репетиция" && (
                     <div className="row rehearsal">
                       <label>{tr("Длительность, мин")}{tr(" ")}
@@ -1062,7 +1065,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
                           type="number"
                           min="15"
                           max="480"
-                          value={form.duration}
+                          value={form.duration ?? 120}
                           onChange={(e) => update("duration", +e.target.value)}
                         />
                       </label>
@@ -1569,7 +1572,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
                               : e.kind === "Репетиция"
                                 ? "#7975ad"
                                 : "#2c8477",
-                          durationEditable: e.kind === "Репетиция",
+                          durationEditable: true,
                           extendedProps: { event: e },
                         })),
                         ...(showTasks
@@ -3051,4 +3054,5 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
     </div>
   );
 }
-createRoot(document.getElementById("root")!).render(<AccountGate>{(account,exit)=><App key={account?.theatre.id+":"+account?.user.id} account={account} exit={exit}/>}</AccountGate>);
+const personalMobile = location.pathname.startsWith("/mobile") || (!sessionStorage.getItem("stageos-token") && (window.matchMedia("(max-width: 760px)").matches || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)));
+createRoot(document.getElementById("root")!).render(personalMobile ? <MobileApp/> : <AccountGate>{(account,exit)=><App key={account?.theatre.id+":"+account?.user.id} account={account} exit={exit}/>}</AccountGate>);
