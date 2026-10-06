@@ -44,7 +44,7 @@ def validate_address(value):
             raise ValueError()
     except ValueError:
         raise ValueError('Неверный порт сервера')
-    if parts.scheme=='http' and any(parts.hostname.lower().endswith(suffix) for suffix in ('.ngrok-free.dev','.ngrok-free.app','.ngrok.app','.ngrok.io','.trycloudflare.com')) and parts.port in (None,80,443):
+    if parts.scheme=='http' and any(parts.hostname.lower().endswith(suffix) for suffix in ('.ngrok-free.dev','.ngrok-free.app','.ngrok.app','.ngrok.io','.trycloudflare.com','.probross.ru')) and parts.port in (None,80,443):
         return 'https://' + parts.hostname
     return value
 
