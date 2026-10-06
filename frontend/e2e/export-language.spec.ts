@@ -24,6 +24,7 @@ test('English switch persists in database and exports real PDF and PNG',async({p
     await page.getByRole('button',{name:'StageOS Assistant',exact:true}).click();
     await page.getByRole('textbox').last().fill('What happens today?');
     await page.getByRole('button',{name:'Ask',exact:true}).click();
-    await expect(page.getByText(/Local AI is disabled/)).toBeVisible();
+    await expect(page.locator('.answer')).toContainText('Asia/Vladivostok');
+    await expect(page.locator('.answer')).toContainText('Scope:');
   }finally{await page.request.put('/api/settings/interface',{data:{language:'ru'}}).catch(()=>{});await page.evaluate(()=>localStorage.setItem('stageos-language','ru')).catch(()=>{});}
 });

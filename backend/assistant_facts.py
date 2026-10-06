@@ -132,6 +132,9 @@ def build_context(s,question,now=None):
     items,i_suggestions=resolve(question,[r for r in rs if r.kind not in ('Person','Venue','Room')])
     parsed_question=strip_entities(question,selected+people+venues+items)
     kind=intent(parsed_question)
+    # A department word (e.g. sound) is not an equipment-name request.
+    if kind != 'resources':
+        items, i_suggestions = [], []
     result={'as_of':clock.isoformat(),'timezone':tz,'theatre':theatre,'intent':kind,'clarification':[],
             'missing':[],'productions':[],'people':[],'venues':[],'resources':[],'events':[],
             'compatibility':[],'analytics':{}}

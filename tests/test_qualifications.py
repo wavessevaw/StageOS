@@ -37,3 +37,12 @@ def test_qualification_catalog_create_delete_and_protect_used(ctx):
     assert c.put('/api/settings/qualifications',json={'names':[n for n in names if n!='Артисты']}).status_code==409
     assert 'Артисты' in c.get('/api/bootstrap').json()['qualifications']
     assert c.put('/api/settings/qualifications',json={'names':['Повтор','Повтор']}).status_code==422
+
+
+def test_department_word_does_not_resolve_unrelated_equipment(ctx):
+    from backend.assistant_facts import build_context
+    c,S,b,rs,r=ctx
+    with S() as s:
+        context=build_context(s,'Кто ведёт звук в постановке «Северный ветер»?')
+    assert not context['clarification']
+    assert context['productions'][0]['name']=='Северный ветер'

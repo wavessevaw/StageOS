@@ -196,6 +196,7 @@ test.describe("StageOS integration", () => {
   test("Production drilldown, palette, AI disabled and diagnostics", async ({
     page,
   }) => {
+    await page.request.post('/api/demo');
     await page.goto("/");
     await page.getByRole("button", { name: "Постановки", exact: true }).click();
     await page
@@ -220,9 +221,12 @@ test.describe("StageOS integration", () => {
       .click();
     await page
       .getByPlaceholder("Кто ведёт звук на Северном ветре?")
-      .fill("Кто ведёт звук?");
+      .fill("Продолжительность Северный ветер");
     await page.getByRole("button", { name: "Спросить", exact: true }).click();
-    await expect(page.locator(".answer")).toContainText("отключён");
+    const assistantBoot = await (await page.request.get('/api/bootstrap')).json();
+    const duration = assistantBoot.productions.find((p:any)=>p.name === 'Северный ветер').data.duration;
+    await expect(page.locator(".answer")).toContainText("Северный ветер");
+    await expect(page.locator(".answer")).toContainText(String(duration));
     await page.getByRole("button", { name: "Настройки", exact: true }).click();
     await expect(
       page.getByRole("heading", { name: "Диагностика" }),
