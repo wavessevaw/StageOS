@@ -36,6 +36,7 @@ import {
 } from "lucide-react";
 import "./style.css";
 import {AccountGate,AccountMenu} from "./Accounts";
+import {DatabaseLocation} from "./Connection";
 import PassportEditor from "./PassportEditor";
 import VenueEditor from "./VenueEditor";
 import ScheduleExport from "./ScheduleExport";
@@ -885,7 +886,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
           )))}
         </nav>
         <div className="sidebar-bottom">
-          <span className="online" />{tr("Локальная база данных")}<small>{tr("StageOS · 1.0.8")}</small>
+          <DatabaseLocation/><small>StageOS · 1.0.10</small>
         </div>
       </aside>
       <main>

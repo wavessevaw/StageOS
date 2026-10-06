@@ -554,6 +554,8 @@ Object.assign(english, {
 });
 
 Object.assign(english, {' · допущен к роли':' · eligible for this role'});
+Object.assign(english, {'База на сервере':'Database on server','Общая база · этот сервер':'Shared database · this server','Проверяем подключение…':'Checking connection…'});
+Object.assign(english, {'Активные пользователи этого театра':'Active users in this theatre','Пользователей':'Users','Сеансов':'Sessions','Последнее обращение':'Last request','Активных сетевых пользователей нет':'No active remote users','Показаны сетевые сеансы с обращениями за последние 90 секунд. Выход из аккаунта завершает сеанс; закрытый клиент исчезает после периода неактивности.':'Remote sessions with requests in the last 90 seconds are shown. Sign-out ends a session; a closed client disappears after the inactivity period.'});
 
 Object.assign(english, {
   "Доступ через Интернет": "Internet access",

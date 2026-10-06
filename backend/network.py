@@ -4,6 +4,7 @@ Clients proxy API requests to the host; database files never leave the host
 except through the explicit administrator export command.
 """
 import base64
+import hashlib
 from collections import deque
 from datetime import datetime, timezone
 import json
@@ -44,17 +45,18 @@ def validate_address(value):
     return value
 
 class LanAccess:
-    def __init__(self, app, code, desktop_token, on_request=None, server_id='', tunnel=None):
+    def __init__(self, app, code, desktop_token, on_request=None, server_id='', tunnel=None, on_user=None):
         self.app, self.code, self.token = app, code, desktop_token
         self.on_request=on_request
         self.server_id, self.tunnel = server_id, tunnel
+        self.on_user = on_user
 
     async def __call__(self, scope, receive, send):
         if scope['type'] != 'http':
             return await self.app(scope, receive, send)
         req = Request(scope)
         if req.url.path == '/api/network/hello' and req.method == 'GET':
-            return await JSONResponse({'product':'StageOS Server','version':'1.0.9','protocol':PROTOCOL,'server_id':self.server_id})(scope, receive, send)
+            return await JSONResponse({'product':'StageOS Server','version':'1.0.10','protocol':PROTOCOL,'server_id':self.server_id})(scope, receive, send)
         if req.url.path.startswith('/api'):
             if req.url.path.startswith('/api/connection'):
                 return await JSONResponse({'detail':'Управление подключением доступно только на компьютере сервера'},403)(scope,receive,send)
@@ -63,6 +65,7 @@ class LanAccess:
             if req.url.path in ('/api/auth/theatres',) and req.method == 'POST' or req.url.path.endswith('/setup'):
                 return await JSONResponse({'detail':'Создание театра и первый администратор доступны на компьютере сервера'},403)(scope,receive,send)
             if self.on_request:self.on_request(scope.get('client',('unknown',0))[0])
+            if self.on_user:self.on_user(req)
             headers = [(k,v) for k,v in scope['headers'] if k.lower() != b'x-stageos-token']
             origin=req.headers.get('origin')
             public_url=self.tunnel.status()['url'] if self.tunnel else ''
@@ -94,6 +97,7 @@ class NetworkController:
         self.firewall_state='unknown'
         self.remote_requests=0
         self.last_remote=None
+        self.user_activity = {}
         self.server_id = secrets.token_hex(24)
         self.tunnel = TunnelController(self.home, self)
         if self.config['mode'] == 'server':
@@ -111,6 +115,42 @@ class NetworkController:
             self.remote_requests+=1
             self.last_remote={'address':address,'time':datetime.now(timezone.utc).isoformat()}
         if first:self.record('success','Получен первый сетевой запрос с верным кодом подключения')
+
+    def observe_user(self,req):
+        registry=self.workspace.state.registry
+        try:user=registry.current(req)
+        except HTTPException:return
+        key=hashlib.sha256(req.cookies.get('stageos_session','').encode()).hexdigest()
+        now=time.time()
+        with self.log_lock:
+            # Store only identifiers/timestamps, never passwords, cookies or session tokens.
+            self.user_activity[key]={'user_id':user['id'],'seen':now}
+
+    def active_users(self,theatre_id):
+        registry=self.workspace.state.registry
+        now=time.time()
+        with self.log_lock:
+            snapshot=list(self.user_activity.items())
+        with registry.lock:
+            sessions=dict(registry.sessions)
+        valid={key:value for key,value in snapshot if now-value['seen']<=90
+               and key in sessions and sessions[key]['expires']>=now}
+        with self.log_lock:
+            for key,value in snapshot:
+                if key not in valid and self.user_activity.get(key)==value:self.user_activity.pop(key,None)
+        grouped={}
+        with registry.db() as db:
+            for value in valid.values():
+                user=db.execute('SELECT id,name,login,role FROM users WHERE id=? AND theatre_id=? AND active=1',
+                                (value['user_id'],theatre_id)).fetchone()
+                if not user:continue
+                row=grouped.setdefault(user['id'],{**dict(user),'sessions':0,'seen':0})
+                row['sessions']+=1;row['seen']=max(row['seen'],value['seen'])
+        result=[]
+        for row in grouped.values():
+            seen=row.pop('seen')
+            result.append({**row,'last_seen':datetime.fromtimestamp(seen,timezone.utc).isoformat()})
+        return sorted(result,key=lambda row:(row['name'].casefold(),row['login']))
 
     def inspect(self):
         with self.diagnostics_lock:
@@ -166,7 +206,7 @@ class NetworkController:
         old_code=self.config['code']
         if self.config['mode']!='server':self.config['code']=secrets.token_urlsafe(18)
         self.server_id = secrets.token_hex(24)
-        app = LanAccess(self.workspace,self.config['code'],os.environ.get('STAGEOS_TOKEN',''),self.observe_request,self.server_id,self.tunnel)
+        app = LanAccess(self.workspace,self.config['code'],os.environ.get('STAGEOS_TOKEN',''),self.observe_request,self.server_id,self.tunnel,self.observe_user)
         server = uvicorn.Server(uvicorn.Config(app,host='0.0.0.0',port=port,log_level='warning',access_log=False,log_config=None))
         thread = threading.Thread(target=server.run,kwargs={'sockets':[listener]},daemon=True)
         self.listener,self.server,self.thread = listener,server,thread
@@ -187,6 +227,7 @@ class NetworkController:
         if self.thread and self.thread.is_alive():raise RuntimeError('Сервер ещё завершает запросы. Повторите позже.')
         if self.listener:self.listener.close()
         self.server=self.thread=self.listener=None
+        with self.log_lock:self.user_activity.clear()
         self.phase='stopped'
         if was_running:self.record('info','Сервер остановлен')
 
@@ -235,7 +276,12 @@ def create_desktop_app(home=None,static_dir=None,bootstrap_file=None):
     @app.get('/api/connection')
     def status(req:Request):
         result=controller.status()
-        try:result['can_manage_tunnel']=workspace.state.registry.current(req)['role']=='admin' and result['mode']=='server'
+        try:
+            user=workspace.state.registry.current(req)
+            result['can_manage_tunnel']=user['role']=='admin' and result['mode']=='server'
+            if result['can_manage_tunnel']:
+                users=controller.active_users(user['theatre_id'])
+                result['users']={'online':len(users),'sessions':sum(row['sessions'] for row in users),'items':users}
         except HTTPException:result['can_manage_tunnel']=False
         return result
 

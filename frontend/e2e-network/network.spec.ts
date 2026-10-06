@@ -38,6 +38,14 @@ test('StageOS Server → connect with code → sign in → shared changes refres
  await page.getByRole('button',{name:'Подключиться к серверу',exact:true}).click();await page.screenshot({path:test.info().outputPath('connection.png')});await page.getByLabel('Адрес сервера').fill('127.0.0.1:8885');await page.getByLabel('Код подключения').fill('wrong-code');await page.getByRole('button',{name:'Проверить и подключиться'}).click();await expect(page.getByRole('alert')).toContainText('Неверный код');
  await page.getByLabel('Код подключения').fill(code);await page.getByRole('button',{name:'Проверить и подключиться'}).click();await expect(page.getByRole('heading',{name:'Выберите театр'})).toBeVisible();await expect(page.getByRole('button',{name:'Создать свой театр',exact:true})).toHaveCount(0);
  await page.getByRole('button').filter({hasText:'Общий театр'}).click();await page.getByLabel('Логин',{exact:true}).fill('admin');await page.getByLabel('Пароль',{exact:true}).fill('test-password');await page.getByRole('button',{name:'Войти',exact:true}).click();await expect(page.getByRole('button',{name:'Календарь',exact:true})).toBeVisible();
+ await expect(page.locator('.sidebar-bottom')).toContainText('База на сервере');
+ await expect(page.locator('.sidebar-bottom')).not.toContainText('Локальная база данных');
+ await expect(host.locator('.sidebar-bottom')).toContainText('Общая база · этот сервер');
+ await page.getByLabel('Язык приложения').selectOption('en');
+ await expect(page.locator('.sidebar-bottom')).toContainText('Database on server');
+ await page.getByLabel('Application language').selectOption('ru');
+ const users=await (await host.request.get('/api/connection')).json();
+ expect(users.users.online).toBe(1);expect(users.users.items[0].login).toBe('admin');
  await page.getByRole('button',{name:'Сотрудники',exact:true}).click();await host.getByRole('button',{name:'Сотрудники',exact:true}).click();
  await host.getByRole('button',{name:'Добавить сотрудника'}).click();await host.getByLabel('Название / ФИО').fill('Сотрудник с сервера');await host.getByLabel('Подразделение',{exact:true}).fill('Артисты');await host.getByRole('button',{name:'Сохранить ресурс'}).click();
  await expect(page.locator('.resource-card').filter({hasText:'Сотрудник с сервера'})).toBeVisible({timeout:15000});
@@ -45,6 +53,7 @@ test('StageOS Server → connect with code → sign in → shared changes refres
  await expect(host.locator('.resource-card').filter({hasText:'Сотрудник с клиента'})).toBeVisible({timeout:15000});
  await page.getByRole('button',{name:'Личный аккаунт'}).click();await page.getByRole('button',{name:'Выйти из аккаунта',exact:true}).click();await expect(page.getByRole('heading',{name:'Выберите театр'})).toBeVisible();expect((await host.request.get('/api/bootstrap')).ok()).toBeTruthy();
  await host.getByRole('button',{name:'Личный аккаунт'}).click();await host.getByRole('button',{name:'Подключение к серверу',exact:true}).click();await expect(host.getByText('Сервер работает',{exact:true})).toBeVisible();await host.screenshot({path:test.info().outputPath('server.png')});
+ await expect(host.locator('.server-users')).toContainText('Активных сетевых пользователей нет');
  expect(errors).toEqual([]);await hostContext.close();
 });
 test('Connection screen is translated into English',async({page})=>{await page.goto('/');await page.getByLabel('Язык приложения').selectOption('en');await page.getByRole('button',{name:'Configure connection'}).click();await expect(page.getByRole('heading',{name:'Connect to a shared database'})).toBeVisible();await expect(page.getByRole('button',{name:'Connect to a server',exact:true})).toBeVisible()});

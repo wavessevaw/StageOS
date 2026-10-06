@@ -59,7 +59,7 @@ jobs:
           fi
           gh release create "$tag" release-assets/* \
             --target "$GITHUB_SHA" \
-            --title "StageOS $version — интернет-туннель и многодневные планы" \
+            --title "StageOS $version — серверная база и активные пользователи" \
             --notes-file "docs/releases/$version.md" \
             --draft
           gh release edit "$tag" --draft=false

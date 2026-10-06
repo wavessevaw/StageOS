@@ -241,7 +241,7 @@ def create_workspace_app(home=None,static_dir=None,bootstrap_file=None):
         return {'ok':True}
 
     @app.post('/api/auth/login')
-    def login(body:LoginBody):
+    def login(body:LoginBody,req:Request):
         r.theatre(body.theatre_id);key=(body.theatre_id,normalized(body.login));now=time.time()
         with r.lock:
             attempts=r.attempts.get(key,[]);attempts=[x for x in attempts if x>now-60]
@@ -249,7 +249,11 @@ def create_workspace_app(home=None,static_dir=None,bootstrap_file=None):
             with r.db() as d:u=d.execute('SELECT * FROM users WHERE theatre_id=? AND login=? AND active=1',key).fetchone()
             encoded=u['password'] if u else r.dummy_hash
             if not password_matches(body.password,encoded):r.attempts[key]=attempts+[now];raise HTTPException(401,'Неверный логин или пароль')
-            r.attempts.pop(key,None);token=secrets.token_urlsafe(32);r.sessions[hashlib.sha256(token.encode()).hexdigest()]={'user_id':u['id'],'expires':now+12*3600}
+            r.attempts.pop(key,None)
+            # A successful account switch replaces this browser's old session only.
+            previous=req.cookies.get(COOKIE,'')
+            if previous:r.sessions.pop(hashlib.sha256(previous.encode()).hexdigest(),None)
+            token=secrets.token_urlsafe(32);r.sessions[hashlib.sha256(token.encode()).hexdigest()]={'user_id':u['id'],'expires':now+12*3600}
             with r.db() as d:r.audit(d,u['id'],body.theatre_id,'Вход в аккаунт')
         result=JSONResponse({'user':r.public_user(u),'theatre':{'id':body.theatre_id,'name':r.theatre(body.theatre_id)['name']}})
         result.set_cookie(COOKIE,token,httponly=True,samesite='strict',path='/api');return result

@@ -1,6 +1,6 @@
 [package]
 name = "stageos"
-version = "1.0.9"
+version = "1.0.10"
 edition = "2021"
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
