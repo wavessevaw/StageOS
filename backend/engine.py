@@ -68,6 +68,7 @@ class Request(BaseModel):
     force: bool = False
     notes: str = Field(default="", max_length=8000)
     rehearsal_people: list[StrictInt] | None = None
+    additional_people: list[StrictInt] = Field(default_factory=list,max_length=2000)
     rehearsal_items: list[StrictInt] = Field(default_factory=list)
     run_through: bool = False
     baseline_plan: bool = False
@@ -452,12 +453,14 @@ def preview(s, r: Request, production_data=None):
         v = Resource(id=v.id, name=v.name, kind="Room", data={**parent.data, **v.data})
     if production_data is not None:
         p = Production(id=p.id, name=p.name, version=p.version, data=deepcopy(production_data))
-    valid_replacements=set(p.data["responsibles"].values())
+    from .production_editor import responsible_ids
+    valid_replacements={rid for value in p.data["responsibles"].values() for rid in responsible_ids(value)}
     for role in p.data["roles"]:valid_replacements.add(role[r.cast])
     for group in ["groups","crew"]:
         for ids in cast_people(p.data,group,r.cast).values():valid_replacements.update(ids)
     for ov in p.data.get("overrides",{}).values():valid_replacements.update(ov.get("orchestra",[]))
     valid_replacements.update(r.rehearsal_people or [])
+    valid_replacements.update(r.additional_people)
     if any(not key.isdecimal() or int(key) not in valid_replacements for key in r.replacements):
         raise ValueError("Замена ссылается на отсутствующую позицию состава")
     if any(k not in {str(i) for i in range(len(p.data['roles']))} or v<=0 for k,v in r.role_assignments.items()):
@@ -496,9 +499,9 @@ def preview(s, r: Request, production_data=None):
         overrides={**{t.name:TaskTiming(start=t.start,duration=t.duration) for t in r.extra_tasks},**r.task_overrides}
         tasks, solver = retime(tasks,overrides,r.start,r.run_through,dependencies)
     performance_call = min([t['start'] for t in tasks if t['name']=='Прогон'] or [r.start])
-    first = min(t["start"] for t in tasks)
-    last = max(t["end"] for t in tasks)
     end = r.start + timedelta(minutes=duration)
+    first = min([r.start]+[t["start"] for t in tasks])
+    last = max([end]+[t["end"] for t in tasks])
     conflicts = list(comp["conflicts"])
     bookings = {}
     assignments = []
@@ -558,17 +561,15 @@ def preview(s, r: Request, production_data=None):
         )
         book(actual, a, b, role)
 
-    techstart = min(t["start"] for t in tasks if t["department"] != "Транспорт")
-    techend = max(t["end"] for t in tasks if t["department"] != "Транспорт")
+    techstart = min([r.start]+[t["start"] for t in tasks if t["department"] != "Транспорт"])
+    techend = max([end]+[t["end"] for t in tasks if t["department"] != "Транспорт"])
     for dept, rid in p.data["responsibles"].items():
-        if rehearsal and dept not in ["Режиссёр", "Помреж", "Дирижёр"]:
-            continue
         a = (
             performance_call - timedelta(minutes=30 if rehearsal else 60)
             if dept in ["Режиссёр", "Дирижёр"]
             else techstart
         )
-        assign(rid, dept, dept, a, end if dept in ["Режиссёр", "Дирижёр"] else techend)
+        for person_id in responsible_ids(rid):assign(person_id, dept, dept, a, end if dept in ["Режиссёр", "Дирижёр"] else techend)
     indices = (
         sorted({j for i in r.scenes for j in p.data["scenes"][i]["roles"]})
         if rehearsal and r.scenes
@@ -618,6 +619,14 @@ def preview(s, r: Request, production_data=None):
             if not person or person.kind!="Person":raise ValueError("Участник репетиции должен быть сотрудником")
             if not any(a['actual_id']==rid for a in assignments):
                 assign(rid,person.data.get('specialization',person.department),person.department,techstart if person.department in ['Звук','Свет','Видео','Сцена','Монтаж','Риггинг','Техдир','Транспорт','Реквизит'] else r.start-timedelta(minutes=15),techend if person.department in ['Звук','Свет','Видео','Сцена','Монтаж','Риггинг','Техдир','Транспорт','Реквизит'] else end,[rid])
+    for rid in dict.fromkeys(r.additional_people):
+        person=resources.get(rid)
+        groups=['Артисты','Балет','Хор','Оркестр']
+        allowed=[d for d in groups if person and d in person.data.get('qualification',[])]
+        if not person or person.kind!='Person' or person.data.get('retired') or not allowed:raise ValueError('Общий вызов разрешён только актёрам, балету, хору и оркестру с указанной квалификацией')
+        if not any(a['actual_id']==rid for a in assignments):
+            dept=person.department if person.department in allowed else allowed[0]
+            assign(rid,'Общий вызов: '+dept,dept,r.start-timedelta(minutes=15 if rehearsal else 90),end,[rid])
     for rid in (r.rehearsal_items if rehearsal else p.data.get('items',[])):
         item=resources.get(rid)
         if not item or item.kind not in ['Equipment','Scenery','Prop','Costume']:raise ValueError('Неизвестная позиция имущества')
@@ -825,13 +834,15 @@ def save_plan(s, r, result, allow_demo=False):
     ev.kind = r.kind
     ev.start = r.start
     ev.end = datetime.fromisoformat(result["end"])
-    if not old: ev.status = "Approved"
+    if not old or old.data.get("plan",{}).get("needs_plan"): ev.status = "Approved"
+    source = old.data.get("afisha") if old else None
     ev.data = {
         "request": r.model_dump(mode="json"),
         "plan": result,
         "layer": "PLANNED",
         "demo_exception": allow_demo,
     }
+    if source:ev.data={**ev.data,"afisha":source}
     s.flush()
     for b in result["bookings"]:
         s.add(
@@ -952,6 +963,7 @@ def saved_event_plan(s, ev):
     if req.get('duration') is not None:
         req['duration'] = int((ev.end-ev.start).total_seconds()/60)
     plan['request'] = req
+    if plan.get('needs_plan'):return plan
     resources = {x.id:x for x in s.scalars(select(Resource))}
     stored = list(s.scalars(select(Booking).where(Booking.event_id==ev.id)))
     bs = {b.resource_id:dict(resource_id=b.resource_id,start=b.start,end=b.end,label=b.label) for b in stored}

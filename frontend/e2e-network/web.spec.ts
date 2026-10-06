@@ -1,6 +1,7 @@
 import {test,expect} from '@playwright/test';
 
 test('Browser enters connection code, signs in and uses the shared server without a desktop gateway',async({browser})=>{
+  test.setTimeout(150000);
   const host=await browser.newContext({baseURL:'http://127.0.0.1:8883'});
   const theatres=await (await host.request.get('/api/auth/theatres')).json();
   const tid=theatres.theatres[0].id;
@@ -18,7 +19,7 @@ test('Browser enters connection code, signs in and uses the shared server withou
   await page.getByRole('button',{name:'Сотрудники',exact:true}).click();await expect(page.locator('.resource-card').filter({hasText:'Сотрудник с клиента'})).toBeVisible();
   // Simulate network loss at the browser boundary; LAN loss is covered separately.
   await page.route('**/api/auth/session',route=>route.fulfill({status:503,contentType:'text/html',body:'<h1>Tunnel unavailable</h1>'}));
-  await expect(page.getByRole('heading',{name:'Вход в аккаунт'})).toBeVisible({timeout:10000});await expect(page.getByLabel('Пароль',{exact:true})).toHaveValue('');
+  await expect(page.getByRole('heading',{name:'Вход в аккаунт'})).toBeVisible({timeout:70000});await expect(page.getByLabel('Пароль',{exact:true})).toHaveValue('');
   await page.unroute('**/api/auth/session');await page.reload();await expect(page.getByRole('button',{name:'Календарь',exact:true})).toHaveCount(0);
   expect(errors).toEqual([]);await web.close();await host.close();
 });

@@ -61,6 +61,10 @@ def install_mobile_routes(app, registry):
 
     @app.post('/api/mobile/logout')
     def logout(req: Request):
+        try:
+            user=current_mobile(registry,req)
+            with registry.db() as db:registry.audit(db,user['id'],user['theatre_id'],'Выход из аккаунта','Мобильный браузер')
+        except HTTPException:pass
         registry.sessions.pop(hashlib.sha256(req.cookies.get(COOKIE,'').encode()).hexdigest(),None)
         response=JSONResponse({'ok':True});response.delete_cookie(COOKIE,path='/api');return response
 

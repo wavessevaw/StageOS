@@ -93,6 +93,7 @@ export default function PassportEditor({
         ),
         ...p.data.responsibles,
       };
+        p.data.responsibles=Object.fromEntries(Object.entries(p.data.responsibles).map(([key,value])=>[key,Array.isArray(value)?value:value?[value]:[]]));
       p.data.crew = {
         Сцена: [],
         Звук: [],
@@ -199,6 +200,7 @@ export default function PassportEditor({
           <small>{tr("Ctrl + щелчок — несколько ролей")}</small>
         </label>
       );
+    if(path[0]==="responsibles"&&path.length===2&&opts&&Array.isArray(value))return <fieldset className="responsible-picker" key={path.join(".")}><legend>{tr(title)}</legend><p>{tr("Выберите одного или нескольких ответственных")}</p>{opts.map(person=><label key={person.id}><input type="checkbox" checked={value.includes(person.id)} onChange={e=>change(path,e.target.checked?[...value,person.id]:value.filter(id=>id!==person.id))}/><span>{person.name}</span></label>)}{!opts.length&&<p>{tr("Нет сотрудников с нужной квалификацией")}</p>}</fieldset>;
     if (opts && (typeof value === "number" || Array.isArray(value)))
       return (
         <label className="field" key={path.join(".")}>

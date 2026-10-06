@@ -13,9 +13,9 @@ BEGIN
   BEGIN
    VALUE "CompanyName", "StageOS"
    VALUE "FileDescription", "StageOS"
-   VALUE "FileVersion", "1.0.12"
+   VALUE "FileVersion", "1.0.13"
    VALUE "ProductName", "StageOS"
-   VALUE "ProductVersion", "1.0.12"
+   VALUE "ProductVersion", "1.0.13"
    VALUE "OriginalFilename", "StageOS.exe"
   END
  END

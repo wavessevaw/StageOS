@@ -76,3 +76,16 @@ def test_mobile_remote_login_without_code_but_desktop_stays_protected(network):
         assert any(x['login']=='vasilisa' for x in stats['items'])
         phone.post('/api/mobile/logout')
         assert not any(x['login']=='vasilisa' for x in admin.get('/api/connection').json()['users']['items'])
+
+
+def test_sound_employee_sees_own_rehearsal_in_mobile(tmp_path,monkeypatch):
+    app,c=make(tmp_path,monkeypatch);tid=theatre(c);person_id=provision(app,c,tid)
+    with app.state.registry.tenant(tid).state.Session.begin() as db:
+        person=db.get(Resource,person_id);person.department='Звук';person.data={'qualification':['Звук']}
+        event=db.query(Event).filter_by(title='Мой спектакль').one()
+        event.kind='Репетиция';event.title='Репетиция со звуком'
+        event.data={'plan':{'assignments':[{'actual_id':person_id,'role':'Звук'}]}}
+    phone=TestClient(app)
+    assert phone.post('/api/mobile/login',json={'login':'vasilisa','password':'test-password'}).status_code==200
+    item=next(x for x in phone.get('/api/mobile/schedule?start=2026-12-01').json()['items'] if x['event_id'])
+    assert item['kind']=='Репетиция' and item['title']=='Репетиция со звуком' and item['role']=='Звук'

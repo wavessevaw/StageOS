@@ -165,7 +165,7 @@ def build_context(s,question,now=None):
     for p in selected:
         d=p.data if isinstance(p.data,dict) else {}
         result['productions'].append({'id':p.id,'name':p.name,'version':p.version,'duration_minutes':d.get('duration'),
-            'permanent_responsibles':{dept:person(rid) for dept,rid in (d.get('responsibles') or {}).items()},
+            'permanent_responsibles':{dept:([person(i) for i in rid] if isinstance(rid,list) else person(rid)) for dept,rid in (d.get('responsibles') or {}).items()},
             'groups':{dept:[person(rid) for rid in (ids or [])] for dept,ids in (d.get('groups') or {}).items()},
             'crew':{dept:[person(rid) for rid in (ids or [])] for dept,ids in (d.get('crew') or {}).items()},
             'roles':[{'index':i,'role':r.get('role'),'cast_A':person(r.get('A')),'cast_B':person(r.get('B')),
@@ -251,7 +251,9 @@ def build_context(s,question,now=None):
 def render_answer(context,question,language='ru'):
     en=language=='en';c=context;k=c['intent'];q=norm(question)
     def label(ru,eng):return eng if en else ru
-    def named(p):return (p['name']+' [#'+str(p['id'])+']') if p else label('не назначен / нет сведений','unassigned / unknown')
+    def named(p):
+        if isinstance(p,list):return ', '.join(named(x) for x in p) or label('не назначен / нет сведений','unassigned / unknown')
+        return (p['name']+' [#'+str(p['id'])+']') if p else label('не назначен / нет сведений','unassigned / unknown')
     def show_bookings(rows):
         return '\n'.join(f"{b['start']} — {b['end']}: {b['label']} ({b['state']})" for b in rows) or label('Бронирований нет.','No bookings.')
     if c['clarification']:

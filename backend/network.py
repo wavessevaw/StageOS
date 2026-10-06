@@ -59,7 +59,7 @@ class LanAccess:
             return await self.app(scope, receive, send)
         req = Request(scope)
         if req.url.path == '/api/network/hello' and req.method == 'GET':
-            return await JSONResponse({'product':'StageOS Server','version':'1.0.12','protocol':PROTOCOL,'server_id':self.server_id})(scope, receive, send)
+            return await JSONResponse({'product':'StageOS Server','version':'1.0.13','protocol':PROTOCOL,'server_id':self.server_id})(scope, receive, send)
         if req.url.path.startswith('/api'):
             if req.url.path.startswith('/api/connection'):
                 return await JSONResponse({'detail':'Управление подключением доступно только на компьютере сервера'},403,headers={'X-StageOS-Web':'1'})(scope,receive,send)
@@ -91,6 +91,8 @@ class NetworkController:
             self.config.update(json.loads(self.path.read_text(encoding='utf-8')))
         self.lock = threading.RLock()
         self.server = self.thread = self.listener = None
+        self.afisha_worker = None
+        self.access_worker = None
         self.error = ''
         self.phase='stopped'
         self.logs=deque(maxlen=80)
@@ -222,8 +224,14 @@ class NetworkController:
         self.config.update(mode='server',port=port,address='');self.error=''
         self.persist()
         self.phase='running';self.record('success',f'Сервер запущен. Ожидание подключений на порту {port}')
+        from .afisha import Worker
+        self.afisha_worker=Worker(self.workspace.state.registry);self.afisha_worker.start()
+        from .access_log import Worker as AccessWorker
+        self.access_worker=AccessWorker(self.workspace.state.registry);self.access_worker.start()
 
     def stop_server(self):
+        if self.afisha_worker:self.afisha_worker.stop();self.afisha_worker=None
+        if self.access_worker:self.access_worker.stop();self.access_worker=None
         self.tunnel.stop()
         was_running=bool(self.server)
         if self.server:self.server.should_exit=True
@@ -261,14 +269,15 @@ class ConnectionDispatch:
             timeout = 8 if scope['path'] in {'/api/auth/session','/api/mobile/session'} else 120
             async with httpx.AsyncClient(timeout=timeout,follow_redirects=False,trust_env=False) as client:
                 response=await client.request(req.method,address+scope['path']+('?' + scope['query_string'].decode() if scope['query_string'] else ''),headers=headers,content=await req.body())
+            if response.headers.get('X-StageOS-Disconnected')=='1' and response.status_code==403:
+                return await JSONResponse({'detail':'Код подключения изменён. Настройте подключение заново.'},403,headers={'X-StageOS-Disconnected':'1'})(scope,receive,send)
             if response.status_code in {502,503,504} or response.headers.get('X-StageOS-Disconnected')=='1':
                 raise httpx.ConnectError('Server disconnected')
             outgoing=Response(response.content,status_code=response.status_code)
             outgoing.raw_headers=[(k,v) for k,v in response.headers.raw if k.lower() not in (b'content-length',b'transfer-encoding',b'content-encoding',b'connection')]
             return await outgoing(scope,receive,send)
         except httpx.HTTPError:
-            outgoing=JSONResponse({'detail':'Сервер недоступен. Проверьте сеть и запущен ли StageOS Server. Изменения не сохранены.'},503,headers={'X-StageOS-Disconnected':'1'})
-            outgoing.delete_cookie('stageos_session',path='/api')
+            outgoing=JSONResponse({'detail':'Связь с сервером временно потеряна. Ответ на действие не получен; проверьте результат после восстановления связи.'},503,headers={'X-StageOS-Reconnecting':'1'})
             return await outgoing(scope,receive,send)
 
 def create_desktop_app(home=None,static_dir=None,bootstrap_file=None):
@@ -384,6 +393,8 @@ def create_desktop_app(home=None,static_dir=None,bootstrap_file=None):
                 if isinstance(error,ValueError):raise HTTPException(422,str(error)) from None
                 raise HTTPException(422,'Не удалось изменить состояние туннеля. Повторите действие') from None
         return status(req)
+    from .access_log import install as install_access_log
+    install_access_log(app,workspace.state.registry,controller)
     return app
 
 

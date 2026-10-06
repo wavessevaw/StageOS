@@ -53,6 +53,8 @@ class Registry:
             d.executescript('''CREATE TABLE IF NOT EXISTS theatres(id TEXT PRIMARY KEY,name TEXT NOT NULL,path TEXT NOT NULL UNIQUE);
             CREATE TABLE IF NOT EXISTS users(id TEXT PRIMARY KEY,theatre_id TEXT NOT NULL REFERENCES theatres(id),name TEXT NOT NULL,login TEXT NOT NULL,password TEXT NOT NULL,role TEXT NOT NULL,active INTEGER NOT NULL DEFAULT 1,UNIQUE(theatre_id,login));
             CREATE TABLE IF NOT EXISTS account_audit(id INTEGER PRIMARY KEY,created TEXT,actor TEXT,theatre_id TEXT,action TEXT);''')
+        from .access_log import migrate
+        migrate(self)
         # Adopt the existing data file without copying, resetting or seeding its content.
         with self.db() as d:empty=not d.execute('SELECT 1 FROM theatres LIMIT 1').fetchone()
         if empty:
@@ -87,7 +89,9 @@ class Registry:
             with d:yield d
         finally:d.close()
 
-    def audit(self,d,actor,tid,action):d.execute('INSERT INTO account_audit(created,actor,theatre_id,action) VALUES(?,?,?,?)',(datetime.now().isoformat(),actor,tid,action))
+    def audit(self,d,actor,tid,action,client='Компьютер'):
+        user=d.execute('SELECT name,login FROM users WHERE id=?',(actor,)).fetchone()
+        d.execute('INSERT INTO account_audit(created,actor,theatre_id,action,actor_name,actor_login,client) VALUES(?,?,?,?,?,?,?)',(datetime.now().astimezone().isoformat(),actor,tid,action,user['name'] if user else None,user['login'] if user else None,client))
 
     def bootstrap(self,path):
         # Private provisioning file contains salted hashes, never published default credentials.
@@ -142,7 +146,7 @@ class Registry:
             previous=req.cookies.get(cookie,'')
             if previous:self.sessions.pop(hashlib.sha256(previous.encode()).hexdigest(),None)
             token=secrets.token_urlsafe(32);self.sessions[hashlib.sha256(token.encode()).hexdigest()]={'user_id':u['id'],'expires':now+12*3600,'kind':kind}
-            with self.db() as d:self.audit(d,u['id'],body.theatre_id,'Вход в аккаунт')
+            with self.db() as d:self.audit(d,u['id'],body.theatre_id,'Вход в аккаунт','Мобильный браузер' if kind=='mobile' else 'Компьютер / браузер')
         result=JSONResponse({'user':self.public_user(u),'theatre':{'id':body.theatre_id,'name':self.theatre(body.theatre_id)['name']}})
         result.set_cookie(cookie,token,httponly=True,samesite='strict',path='/api');return result
 
@@ -163,6 +167,7 @@ class TenantDispatch:
             u=self.r.current(req);method=req.method
             if u['role']!='admin' and (path.startswith('/api/database/') or path.startswith('/api/settings/llm') or path=='/api/diagnostics'):raise HTTPException(403,'Требуются права администратора')
             read_only={'/api/preview','/api/windows','/api/substitutions','/api/equipment-substitutions','/api/assistant','/api/suggestions','/api/suggestions/explain'}
+            if path.startswith('/api/afisha') and method not in ['GET','HEAD'] and u['role'] not in DECISION_ROLES:raise HTTPException(403,'Импорт афиши доступен администратору или художественному руководителю')
             cast_proposal = path.startswith('/api/productions/') and path.endswith('/cast-proposal')
             if cast_proposal:
                 read_only.add(path)
@@ -270,7 +275,12 @@ def create_workspace_app(home=None,static_dir=None,bootstrap_file=None):
 
     @app.post('/api/auth/logout')
     def logout(req:Request):
-        token=req.cookies.get(COOKIE,'');r.sessions.pop(hashlib.sha256(token.encode()).hexdigest(),None)
+        token=req.cookies.get(COOKIE,'')
+        try:
+            user=r.current(req)
+            with r.db() as db:r.audit(db,user['id'],user['theatre_id'],'Выход из аккаунта')
+        except HTTPException:pass
+        r.sessions.pop(hashlib.sha256(token.encode()).hexdigest(),None)
         response=JSONResponse({'ok':True});response.delete_cookie(COOKIE,path='/api');return response
 
     def admin(req):

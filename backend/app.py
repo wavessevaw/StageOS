@@ -84,7 +84,7 @@ def create_app(engine=None, static_dir=None, demo_enabled=None):
     with engine.begin() as connection:
         cfg.attributes["connection"] = connection
         command.upgrade(cfg, "head")
-    app = FastAPI(title="StageOS", version="1.0.12")
+    app = FastAPI(title="StageOS", version="1.0.13")
     app.state.Session = Session
 
     @app.middleware("http")
@@ -354,6 +354,7 @@ def create_app(engine=None, static_dir=None, demo_enabled=None):
                     {
                         **serial(ev),
                         "data": {"request": r.model_dump(mode="json")},
+                        "needs_plan": bool(p.get("needs_plan")),
                         "health": p["status"],
                         "conflict_count": len(p["conflicts"]),
                         "tasks": [
@@ -448,6 +449,7 @@ def create_app(engine=None, static_dir=None, demo_enabled=None):
                 or flow.index(body.status) != flow.index(ev.status) + 1
             ):
                 raise ValueError("Недопустимый переход статуса")
+            if ev.data.get("plan",{}).get("needs_plan") and body.status != "Cancelled":raise ValueError("Сначала заполните производственный план")
             before = ev.status
             ev.status = body.status
             ev.version += 1
@@ -1229,6 +1231,8 @@ def create_app(engine=None, static_dir=None, demo_enabled=None):
         )
         return results
 
+    from .afisha import install as install_afisha
+    install_afisha(app,Session,LOCK)
     static = Path(static_dir) if static_dir else root / "frontend" / "dist"
     if static.exists():
         app.mount("/assets", StaticFiles(directory=static / "assets"), name="assets")

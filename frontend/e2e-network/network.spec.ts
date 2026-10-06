@@ -28,6 +28,7 @@ for(const language of ['ru','en'])test(`Internet tunnel installation, verified a
  await expect(page.locator('.server-tunnel')).toContainText(name('Интернет-туннель остановлен','Internet tunnel stopped'));
 });
 test('StageOS Server → connect with code → sign in → shared changes refresh both computers',async({page,browser})=>{
+ test.setTimeout(180000);
  const hostContext=await browser.newContext({baseURL:'http://127.0.0.1:8883'});const host=await hostContext.newPage();const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));host.on('pageerror',e=>errors.push(e.message));
  const created=await host.request.post('/api/auth/theatres',{data:{theatre_name:'Общий театр',name:'Администратор сервера',login:'admin',password:'test-password'}});expect(created.ok()).toBeTruthy();const tid=(await created.json()).id;
  expect((await host.request.post('/api/auth/login',{data:{theatre_id:tid,login:'admin',password:'test-password'}})).ok()).toBeTruthy();
@@ -48,9 +49,9 @@ test('StageOS Server → connect with code → sign in → shared changes refres
  expect(users.users.online).toBe(1);expect(users.users.items[0].login).toBe('admin');
  await page.getByRole('button',{name:'Сотрудники',exact:true}).click();await host.getByRole('button',{name:'Сотрудники',exact:true}).click();
  await host.getByRole('button',{name:'Добавить сотрудника'}).click();await host.getByLabel('Название / ФИО').fill('Сотрудник с сервера');await host.getByLabel('Подразделение',{exact:true}).fill('Артисты');await host.getByRole('button',{name:'Сохранить ресурс'}).click();
- await expect(page.locator('.resource-card').filter({hasText:'Сотрудник с сервера'})).toBeVisible({timeout:15000});
+ await expect(page.locator('.resource-card').filter({hasText:'Сотрудник с сервера'})).toBeVisible({timeout:70000});
  await page.getByRole('button',{name:'Добавить сотрудника'}).click();await page.getByLabel('Название / ФИО').fill('Сотрудник с клиента');await page.getByLabel('Подразделение',{exact:true}).fill('Артисты');await page.getByRole('button',{name:'Сохранить ресурс'}).click();
- await expect(host.locator('.resource-card').filter({hasText:'Сотрудник с клиента'})).toBeVisible({timeout:15000});
+ await expect(host.locator('.resource-card').filter({hasText:'Сотрудник с клиента'})).toBeVisible({timeout:70000});
  await page.getByRole('button',{name:'Личный аккаунт'}).click();await page.getByRole('button',{name:'Выйти из аккаунта',exact:true}).click();await expect(page.getByRole('heading',{name:'Выберите театр'})).toBeVisible();expect((await host.request.get('/api/bootstrap')).ok()).toBeTruthy();
  await host.getByRole('button',{name:'Личный аккаунт'}).click();await host.getByRole('button',{name:'Подключение к серверу',exact:true}).click();await expect(host.getByText('Сервер работает',{exact:true})).toBeVisible();await host.screenshot({path:test.info().outputPath('server.png')});
  await expect(host.locator('.server-users')).toContainText('Активных сетевых пользователей нет');
@@ -58,12 +59,12 @@ test('StageOS Server → connect with code → sign in → shared changes refres
  expect((await page.request.post('/api/auth/login',{data:{theatre_id:tid,login:'admin',password:'test-password'}})).ok()).toBeTruthy();
  await page.reload();await expect(page.getByRole('button',{name:'Календарь',exact:true})).toBeVisible();
  expect((await host.request.post('/api/connection',{data:{mode:'local'}})).ok()).toBeTruthy();
- await expect(page.getByRole('heading',{name:'Вход в аккаунт',exact:true})).toBeVisible({timeout:15000});
+ await expect(page.getByRole('heading',{name:'Вход в аккаунт',exact:true})).toBeVisible({timeout:70000});
  await expect(page.getByRole('button',{name:'Календарь',exact:true})).toHaveCount(0);
  await expect(page.getByRole('alert')).toContainText('Связь с сервером потеряна');
  await expect(page.getByLabel('Пароль',{exact:true})).toHaveValue('');
  const restarted=await host.request.post('/api/connection',{data:{mode:'server',port:8885}});expect(restarted.ok()).toBeTruthy();
- expect((await page.request.get('/api/auth/session')).status()).toBe(503); // the restarted host has a new connection code
+ expect((await page.request.get('/api/auth/session')).status()).toBe(403); // the restarted host has a new connection code
  await page.getByRole('button',{name:'Настроить подключение',exact:true}).click();
  await page.getByLabel('Код подключения').fill((await restarted.json()).code);
  await page.getByRole('button',{name:'Проверить и подключиться'}).click();

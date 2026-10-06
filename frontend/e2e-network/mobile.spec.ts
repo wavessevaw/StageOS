@@ -1,6 +1,7 @@
 import {test,expect} from '@playwright/test';
 
 test('Phone signs in without connection code, sees only its own weekly assignments and reconnects by login',async({browser})=>{
+  test.setTimeout(180000);
   const host=await browser.newContext({baseURL:'http://127.0.0.1:8883'});
   const created=await host.request.post('/api/auth/theatres',{data:{theatre_name:'Я мобильный театр',name:'Администратор',login:'mobile-admin',password:'test-password'}});expect(created.ok()).toBeTruthy();
   const tid=(await created.json()).id;
@@ -32,9 +33,16 @@ test('Phone signs in without connection code, sees only its own weekly assignmen
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBeTruthy();expect(await page.locator('.mobile-app > main').evaluate(el=>el.getBoundingClientRect().width)).toBeGreaterThan(290);
   await page.screenshot({path:test.info().outputPath('personal-mobile.png'),fullPage:true});
   await page.getByRole('button',{name:'Следующая неделя'}).click();await expect(page.getByRole('heading',{name:'Мой спектакль'})).toHaveCount(0);await page.getByRole('button',{name:'Текущая неделя'}).click();await expect(page.getByRole('heading',{name:'Мой спектакль'})).toBeVisible();
-  await page.route('**/api/mobile/schedule?*',route=>route.fulfill({status:503,contentType:'text/html',body:'<h1>Tunnel unavailable</h1>'}));
-  await expect(page.getByRole('heading',{name:'Вход в личное расписание'})).toBeVisible({timeout:16000});await expect(page.getByLabel('Пароль',{exact:true})).toHaveValue('');
-  await page.unroute('**/api/mobile/schedule?*');await page.reload();await expect(page.getByRole('heading',{name:'Вход в личное расписание'})).toBeVisible();
+  let brief=0;
+  await page.route('**/api/mobile/**',route=>{brief++;return brief<=3?route.fulfill({status:503,contentType:'text/html',body:'Temporary network loss'}):route.continue()});
+  await page.getByRole('button',{name:'Следующая неделя'}).click();
+  await expect(page.getByRole('heading',{name:'Восстанавливаем связь с сервером'})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Восстанавливаем связь с сервером'})).toHaveCount(0,{timeout:16000});
+  await expect(page.getByRole('heading',{name:'Василиса Серова',exact:true})).toBeVisible();
+  await page.unroute('**/api/mobile/**');await page.getByRole('button',{name:'Текущая неделя'}).click();await expect(page.getByRole('heading',{name:'Мой спектакль'})).toBeVisible();
+  await page.route('**/api/mobile/**',route=>route.fulfill({status:503,contentType:'text/html',body:'<h1>Tunnel unavailable</h1>'}));
+  await expect(page.getByRole('heading',{name:'Вход в личное расписание'})).toBeVisible({timeout:70000});await expect(page.getByLabel('Пароль',{exact:true})).toHaveValue('');
+  await page.unroute('**/api/mobile/**');await page.reload();await expect(page.getByRole('heading',{name:'Вход в личное расписание'})).toBeVisible();
   await page.getByLabel('Логин',{exact:true}).fill('Василиса Серова');await page.getByLabel('Пароль',{exact:true}).fill('test-password');await page.getByRole('button',{name:'Войти',exact:true}).click();await expect(page.getByRole('heading',{name:'Мой спектакль'})).toBeVisible();
   await page.setViewportSize({width:320,height:700});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBeTruthy();expect(await page.locator('.mobile-app > main').evaluate(el=>el.getBoundingClientRect().width)).toBeGreaterThan(290);
   await page.getByLabel('Язык приложения').selectOption('en');await expect(page.getByRole('button',{name:'Current week'})).toBeVisible();await page.getByRole('button',{name:'Sign out',exact:true}).click();

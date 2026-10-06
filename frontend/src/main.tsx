@@ -45,6 +45,9 @@ import VenueEditor from "./VenueEditor";
 import ScheduleExport from "./ScheduleExport";
 import {DataValue,ImportedData,isImportedMetadata,importedLabel} from "./ImportedData";
 import { ru } from "./ru";
+import {Recovery} from "./Recovery";
+import {ArtsPeople} from "./ArtsPeople";
+import {Afisha} from "./Afisha";
 type Obj = Record<string, any>;
 const initialToken = new URLSearchParams(location.search).get("token");
 if (initialToken) {
@@ -147,6 +150,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
     [filter, setFilter] = useState<Obj>({}),
     [view, setView] = useState("timeGridWeek"),
     [calDate, setCalDate] = useState(today),
+    [showAfisha, setShowAfisha] = useState(false),
     [showExport, setShowExport] = useState(false),
     [calendarBusy, setCalendarBusy] = useState(false),
     [selected, setSelected] = useState<Obj | null>(null),
@@ -260,7 +264,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
   }
   useEffect(()=>{if(!account)return;let stopped=false;let seen:number|undefined;
     const poll=async()=>{try{const next=await api('/sync');if(stopped)return;if(seen!==undefined&&seen!==next.revision){await load();setRevision(v=>v+1)}seen=next.revision}catch{}};
-    poll();const timer=setInterval(poll,5000);return()=>{stopped=true;clearInterval(timer)};
+    poll();const timer=setInterval(poll,30000);return()=>{stopped=true;clearInterval(timer)};
   },[account?.theatre.id]);
   useEffect(() => {
     load();
@@ -380,7 +384,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
     if (p === "Добавить спектакль") newPassport();
   }
   function update(k: string, v: any) {
-    setForm((f) => k === "start" ? shiftedStart(f, v) : ({ ...f, [k]: v, ...(k === "kind"||k === "production_id" ? { task_overrides:{},removed_tasks:[],extra_tasks:[],role_assignments:{},replacements:{},baseline_plan:true,run_through:true,duration:undefined,rehearsal_people:null,rehearsal_items:[] } : k==="cast"?{role_assignments:{},replacements:{}}:{}) }));
+    setForm((f) => k === "start" ? shiftedStart(f, v) : ({ ...f, [k]: v, ...(k === "kind"||k === "production_id" ? { task_overrides:{},removed_tasks:[],extra_tasks:[],role_assignments:{},replacements:{},baseline_plan:true,run_through:true,duration:undefined,rehearsal_people:null,rehearsal_items:[],additional_people:[] } : k==="cast"?{role_assignments:{},replacements:{}}:{}) }));
     setWindows([]);
   }
   async function run(fn: () => Promise<any>) {
@@ -598,6 +602,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
     );
   }
   function planContent(p: Obj) {
+    if(p.needs_plan)return <p className="notice">{tr("Событие добавлено из афиши. Производственный план и назначения сотрудников не заполнены. Окончание в календаре условное: 15 минут после начала. Заполните паспорт постановки и нажмите «Заполнить производственный план».")}</p>;
     return (
       <>
         <div className="metrics">
@@ -611,7 +616,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
           </div>
           <div>
             <small>{tr("ПОДГОТОВКА С")}</small>
-            <b>{tr(time(p.tasks[0].start))}</b>
+            <b>{tr(time(p.tasks[0]?.start || p.start))}</b>
           </div>
           <div>
             <small>{tr("КОНФИГУРАЦИЯ")}</small>
@@ -816,7 +821,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
                     }}
                   />
                   <small>{tr("до ")}{tr(date(t.end))} {tr(time(t.end))}</small>
-                  {!["Спектакль","Репетиция"].includes(t.name)&&<button disabled={busy} aria-label={tr("Удалить этап")+" "+t.name} onClick={()=>changePlan(p,removeStage(p,t.name))}>{tr("Удалить этап")}</button>}
+                  {<button disabled={busy} aria-label={tr("Удалить этап")+" "+t.name} onClick={()=>changePlan(p,removeStage(p,t.name))}>{tr("Удалить этап")}</button>}
                   {p.request.task_overrides?.[t.name] && (
                     <button
                       onClick={() => {
@@ -891,7 +896,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
           )))}
         </nav>
         <div className="sidebar-bottom">
-          <DatabaseLocation/><small>StageOS · 1.0.12</small>
+          <DatabaseLocation/><small>StageOS · 1.0.13</small>
         </div>
       </aside>
       <main>
@@ -1057,6 +1062,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
                       />
                     </label>
                   </div>
+                  <ArtsPeople resources={resources} selected={form.kind==="Репетиция"?(form.rehearsal_people||[]):(form.additional_people||[])} onChange={ids=>update(form.kind==="Репетиция"?"rehearsal_people":"additional_people",ids)}/>
                   {form.kind !== "Репетиция" && <label className="field"><span>{tr("Общая продолжительность с антрактами, мин")}</span><input type="number" min={15} max={480} value={form.duration ?? prod?.data.duration ?? 120} onChange={e=>update("duration",e.target.value ? +e.target.value : undefined)}/></label>}
                   {form.kind === "Репетиция" && (
                     <div className="row rehearsal">
@@ -1243,7 +1249,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
                           onClick={() => {
                             setRehearsalDept(d);
                             if (form.rehearsal_people == null)
-                              update("rehearsal_people", []);
+                              update("rehearsal_people", [...new Set((live?.assignments || []).map((a: Obj) => a.actual_id))]);
                           }}
                         >
                           {tr(ru(d))}
@@ -1322,7 +1328,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
                         <span>{tr("участников")}</span>
                       </div>
                       <div>
-                        <b>{tr(live ? time(live.tasks[0].start) : "—")}</b>
+                        <b>{tr(live ? time(live.tasks[0]?.start || live.start) : "—")}</b>
                         <span>{tr("начало подготовки")}</span>
                       </div>
                       <div>
@@ -1378,6 +1384,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
                     <div className="eyebrow">{tr("ЛЮДИ И ПРОИЗВОДСТВО В ОДНОМ РИТМЕ")}</div>
                     <h1>{tr("Календарь")}</h1>
                   </div>
+                  {canApprove&&<button onClick={()=>setShowAfisha(true)}>{tr("Автоимпорт афиши")}</button>}
                   <button onClick={()=>setShowExport(true)}>{tr("Экспорт расписания")}</button>
                   <button
                     className="primary"
@@ -2820,7 +2827,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
                   setDetail(null);
                   analyze(req);
                 }}
-              >{tr("Изменить")}</button>
+              >{tr(detail.current.needs_plan?"Заполнить производственный план":"Изменить")}</button>
               <button
                 onClick={() => {
                   setSlots([detail]);
@@ -2847,6 +2854,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
           </section>
         </div>
       )}
+      {showAfisha&&<Afisha api={api} onClose={()=>{setShowAfisha(false);load();setRevision(x=>x+1)}}/>}
       {tr(showExport && <ScheduleExport date={calDate} filters={filter} locale={language} onClose={()=>setShowExport(false)}/>)}
       {showQualifications && <QualificationManager api={api} onClose={()=>{setShowQualifications(false);load();}}/>}
       {resourceEditor && (
@@ -3055,4 +3063,4 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
   );
 }
 const personalMobile = location.pathname.startsWith("/mobile") || (!sessionStorage.getItem("stageos-token") && (window.matchMedia("(max-width: 760px)").matches || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)));
-createRoot(document.getElementById("root")!).render(personalMobile ? <MobileApp/> : <AccountGate>{(account,exit)=><App key={account?.theatre.id+":"+account?.user.id} account={account} exit={exit}/>}</AccountGate>);
+createRoot(document.getElementById("root")!).render(<Recovery>{personalMobile ? <MobileApp/> : <AccountGate>{(account,exit)=><App key={account?.theatre.id+":"+account?.user.id} account={account} exit={exit}/>}</AccountGate>}</Recovery>);

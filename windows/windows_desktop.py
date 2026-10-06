@@ -8,6 +8,7 @@ sys.path.insert(0, str(ROOT))
 HOME = Path(os.environ.get("STAGEOS_HOME", Path(os.environ.get("LOCALAPPDATA", Path.home())) / "StageOS-Work"))
 HOME.mkdir(parents=True, exist_ok=True)
 os.environ["STAGEOS_HOME"] = str(HOME)
+os.environ["STAGEOS_INSTALL_DIR"] = str(ROOT.parent)
 os.environ["STAGEOS_TOKEN"] = secrets.token_urlsafe(32)
 
 

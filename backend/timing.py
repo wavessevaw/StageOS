@@ -94,7 +94,6 @@ def customize(tasks,removed,extra):
     original={t['name'] for t in tasks}
     gone=set(removed)
     if gone-original:raise ValueError('Неизвестный удаляемый этап')
-    if gone & {'Спектакль','Репетиция'}:raise ValueError('Основное событие нельзя удалить из производственного плана')
     added=[t.name for t in extra]
     # Lunch may also be added explicitly to a plan without a run-through.
     if len(set(added))!=len(added) or set(added)&(original|(set(DEPS)-{'Обед'})):

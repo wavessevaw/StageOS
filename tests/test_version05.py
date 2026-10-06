@@ -60,7 +60,6 @@ def test_edit_stages_and_individual_actor_persist(ctx):
 @pytest.mark.parametrize(
     "changes",
     [
-        {"removed_tasks": ["Спектакль"]},
         {"removed_tasks": ["Несуществующий этап"]},
         {"role_assignments": {"999": 1}},
         {"role_assignments": {"0": -1}},
@@ -266,3 +265,19 @@ def test_import_rejects_invalid_history_settings(ctx):
     with S.begin() as session:session.get(Setting,'learning').value={'enabled':True}
     assert c.post('/api/database/import',content=backup.content).status_code==422
     assert c.get('/api/settings/learning').json()=={'enabled':True}
+
+
+def test_every_plan_stage_can_be_removed_without_deleting_calendar_event(ctx):
+    c,S,b,resources,request=ctx
+    for kind in ['Спектакль','Репетиция']:
+        req={**request,'kind':kind,'baseline_plan':True}
+        plan=c.post('/api/preview',json=req).json()
+        req['removed_tasks']=[t['name'] for t in plan['tasks']]
+        response=c.post('/api/preview',json=req)
+        assert response.status_code==200,response.text
+        empty=response.json();assert empty['tasks']==[]
+        assert empty['start']==plan['start'] and empty['end']==plan['end']
+        assert empty['assignments'] and empty['bookings']
+        req['force']=True;req['override_reason']='Удаление этапов согласовано для проверки'
+        saved=confirm(c,req);assert saved.status_code==200,saved.text
+        assert c.get('/api/events/'+str(saved.json()['id'])).json()['current']['tasks']==[]

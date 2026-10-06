@@ -1,3 +1,4 @@
+import {AccessLog} from './AccessLog';
 import {apiFetch} from "./NetworkFetch";
 import React,{useEffect,useRef,useState} from 'react';
 import {tr,message} from './i18n';
@@ -10,16 +11,17 @@ async function request(path:string,method='GET',body?:Obj){
  if(r.status===403 && r.headers.get('X-StageOS-Web')==='1' && method==='GET' && path==='')return {mode:'web',enabled:true,running:true,address:location.origin};
  const value=await r.json();if(!r.ok)throw Error(typeof value.detail==='string'?value.detail:tr('Проверьте настройки подключения'));return value;
 }
+export async function connectionRequest(path:string,method='GET',body?:Obj){return request(path,method,body)}
 export async function connectionApi(method='GET',body?:Obj){return request('',method,body)}
 export function DatabaseLocation(){
  const [mode,setMode]=useState('unknown');
- useEffect(()=>{let active=true;const poll=async()=>{try{const s=await connectionApi();if(active)setMode(s?.mode||'local')}catch{if(active)setMode('unavailable')}};void poll();const id=setInterval(poll,3000);return()=>{active=false;clearInterval(id)}},[]);
+ useEffect(()=>{let active=true;const poll=async()=>{try{const s=await connectionApi();if(active)setMode(s?.mode||'local')}catch{if(active)setMode('unavailable')}};void poll();const id=setInterval(poll,30000);return()=>{active=false;clearInterval(id)}},[]);
  const labels:Obj={local:'Локальная база данных',client:'База на сервере',web:'База на сервере',server:'Общая база · этот сервер',unknown:'Проверяем подключение…',unavailable:'Нет связи с ядром'};
  return <><span className={'online'+(['unknown','unavailable'].includes(mode)?' connection-unknown':'')}/><span className="database-location">{tr(labels[mode]||labels.unknown)}</span></>;
 }
 export function ServerIndicator(){
  const [state,setState]=useState<Obj|null>(null),[offline,setOffline]=useState(false);
- useEffect(()=>{let active=true;const poll=async()=>{try{const s=await connectionApi();if(active){setState(s);setOffline(false)}}catch{if(active)setOffline(true)}};poll();const id=setInterval(poll,3000);return()=>{active=false;clearInterval(id)}},[]);
+ useEffect(()=>{let active=true;const poll=async()=>{try{const s=await connectionApi();if(active){setState(s);setOffline(false)}}catch{if(active)setOffline(true)}};poll();const id=setInterval(poll,30000);return()=>{active=false;clearInterval(id)}},[]);
  if(!state||(state.mode!=='server'&&state.phase!=='error'))return null;
  return <button className={'server-indicator '+(!offline&&state.running?'good':'bad')} onClick={()=>window.dispatchEvent(new Event('stageos-connection'))}><span className="server-dot"/>{tr(offline?'Нет связи с ядром':state.running?'Сервер работает':'Сервер остановлен')} · {state.port}</button>;
 }
@@ -73,6 +75,7 @@ export function Connection({initial,onClose}:{initial:Obj,onClose:()=>void}){
  <div className="server-actions"><button className="primary" disabled={!!busy}>{tr(mode==='server'?(running&&Number(port)===state.port?'Сервер запущен · проверить':'Запустить сервер'):mode==='client'?'Проверить и подключиться':'Использовать локальную базу')}</button><button type="button" disabled={!!busy} onClick={()=>changed?location.reload():onClose()}>{tr('Продолжить')}</button></div>
  </form>
  {mode==='server'&&<Tunnel state={state} onUpdate={setState}/>}
+ {mode==='server'&&state.can_manage_tunnel&&<AccessLog/>}
  {mode==='server'&&state.users&&<section className="server-users"><h3>{tr('Активные пользователи этого театра')}</h3><p>{tr('Пользователей')}: <strong>{state.users.online}</strong> · {tr('Сеансов')}: <strong>{state.users.sessions}</strong></p><p className="muted">{tr('Показаны сетевые сеансы с обращениями за последние 90 секунд. Выход из аккаунта завершает сеанс; закрытый клиент исчезает после периода неактивности.')}</p>{state.users.items.length?<div className="server-users-table"><table><thead><tr>{['Имя','Логин','Роль','Сеансов','Последнее обращение'].map(label=><th key={label}>{tr(label)}</th>)}</tr></thead><tbody>{state.users.items.map((user:Obj)=><tr key={user.id}><td>{user.name}</td><td>{user.login}</td><td>{tr(({admin:'Администратор',artistic_director:'Художественный руководитель',editor:'Планировщик',viewer:'Наблюдатель'} as Obj)[user.role])}</td><td>{user.sessions}</td><td>{new Date(user.last_seen).toLocaleTimeString()}</td></tr>)}</tbody></table></div>:<p>{tr('Активных сетевых пользователей нет')}</p>}</section>}
  {mode==='server'&&<div className="server-journal"><h3>{tr('Журнал сервера')}</h3><div className="server-terminal" ref={terminal} role="log" aria-label={tr('Журнал сервера')} aria-live="polite">{logs.length?logs.map((line,i)=><div key={line.time+i} className={line.level}><time>{new Date(line.time).toLocaleTimeString()}</time><span>{message(line.message)}</span></div>):<p>{tr('Ожидание действий…')}</p>}</div></div>}
  </section>;

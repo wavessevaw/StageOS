@@ -101,7 +101,7 @@ export function AddStage({
     })(),
     duration: "30",
     after: "",
-    before: main,
+    before: plan.tasks.some((t: Obj) => t.name === main) ? main : "",
   });
   const field = (key: string, value: string) =>
     setForm((f) => ({ ...f, [key]: value }));

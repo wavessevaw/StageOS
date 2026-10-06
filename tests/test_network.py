@@ -100,8 +100,8 @@ def test_server_loss_and_bad_connection_do_not_copy_or_write(network):
     host.state.network.stop_server()
     disconnected=a.get('/api/bootstrap')
     assert disconnected.status_code==503
-    assert disconnected.headers['X-StageOS-Disconnected']=='1'
-    assert 'stageos_session' not in a.cookies
+    assert disconnected.headers['X-StageOS-Reconnecting']=='1'
+    assert 'stageos_session' in a.cookies
     assert a.post('/api/resources',json={'kind':'Person','name':'Не сохранён'}).status_code==503
     assert local.get('/api/bootstrap').json()['resources']==[]
     assert a.post('/api/connection',json={'mode':'local'}).status_code==200
@@ -114,16 +114,15 @@ def test_server_loss_and_bad_connection_do_not_copy_or_write(network):
         assert native.status()['running']
     finally:native.stop_server()
 
-def test_connection_loss_requires_login_after_server_returns(network):
+def test_connection_loss_preserves_login_for_retry_after_server_returns(network):
     host,local,(a,b),tid,address,code=network
     host.state.network.stop_server()
     response=a.get('/api/auth/session')
     assert response.status_code==503
-    assert response.headers['X-StageOS-Disconnected']=='1'
-    assert 'stageos_session' not in a.cookies
+    assert response.headers['X-StageOS-Reconnecting']=='1'
+    assert 'stageos_session' in a.cookies
     host.state.network.start_server(int(address.rsplit(':',1)[1]))
-    assert a.get('/api/auth/session').status_code==401
-    assert login(a,tid).status_code==200
+    assert a.get('/api/auth/session').status_code==200
     assert a.get('/api/bootstrap').status_code==200
     assert local.get('/api/bootstrap').status_code==200
 

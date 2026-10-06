@@ -58,8 +58,10 @@ def validate_production(s, source, *, check_qualifications=True, allow_retired=F
     if d['vehicle']:ref(d['vehicle'],['Vehicle'])
     for group in ['responsibles','groups','crew','orchestra_versions','pipeline','overrides']:
         if not isinstance(d.get(group,{}),dict):raise ValueError('Раздел паспорта должен быть объектом: '+group)
-    for dept,rid in d['responsibles'].items():
-        if rid:
+    for dept,value in d['responsibles'].items():
+        people=responsible_ids(value)
+        ids(people,['Person'])
+        for rid in people:
             person=ref(rid,['Person'])
             if check_qualifications and dept not in person.data.get('qualification',[]):raise ValueError('Сотрудник не имеет квалификации: '+dept)
     d['responsibles']={k:v for k,v in d['responsibles'].items() if v}
@@ -108,12 +110,15 @@ def validate_production(s, source, *, check_qualifications=True, allow_retired=F
             if check_qualifications and 'Оркестр' not in ref(rid,['Person']).data.get('qualification',[]):raise ValueError('Адаптация требует музыканта оркестра')
     return d
 
+def responsible_ids(value):
+    return value if isinstance(value,list) else [value] if value else []
+
 def referenced_ids(data):
     """IDs only; dimensions, quantities and numeric scene indices are not references."""
     out=set()
     for k in ['home_venue','vehicle']:
         if data.get(k):out.add(data[k])
-    out.update(data.get('responsibles',{}).values())
+    for value in data.get('responsibles',{}).values():out.update(responsible_ids(value))
     for k in ['groups','crew','orchestra_versions']:
         for ids in data.get(k,{}).values():out.update(ids)
     for role in data.get('roles',[]):

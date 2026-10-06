@@ -1,7 +1,7 @@
 {
   "name": "stageos-desktop",
   "private": true,
-  "version": "1.0.12",
+  "version": "1.0.13",
   "scripts": {
     "tauri": "tauri"
   },
