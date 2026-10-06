@@ -14,6 +14,7 @@ from urllib.parse import urlsplit
 
 import httpx
 from .tunnel import TunnelController as NgrokTunnel
+from .probross_tunnel import ProbrossTunnel
 
 VERSION = '2026.10.0'
 URL = f'https://github.com/cloudflare/cloudflared/releases/download/{VERSION}/cloudflared-windows-amd64.exe'
@@ -245,8 +246,8 @@ class InternetTunnelController:
         self.home = Path(home) / 'tunnel'
         self.preference = self.home / 'provider.json'
         self.lock = threading.RLock()
-        self.providers = {'ngrok': NgrokTunnel(home, network), 'cloudflare': CloudflareTunnel(home, network)}
-        self.provider = 'ngrok' if (self.home / 'authtoken.dpapi').exists() else 'cloudflare'
+        self.providers = {'probross': ProbrossTunnel(home, network), 'ngrok': NgrokTunnel(home, network), 'cloudflare': CloudflareTunnel(home, network)}
+        self.provider = 'probross'
         try:
             value = json.loads(self.preference.read_text(encoding='utf-8'))
             if value.get('provider') in self.providers:
@@ -261,7 +262,7 @@ class InternetTunnelController:
     def select(self, provider):
         with self.lock:
             if provider not in self.providers:
-                raise ValueError('Выберите Cloudflare или ngrok')
+                raise ValueError('Выберите Probross, Cloudflare или ngrok')
             if provider == self.provider:
                 return
             self.providers[self.provider].stop()
@@ -289,6 +290,6 @@ class InternetTunnelController:
 
     def forget_key(self):
         with self.lock:
-            if self.provider != 'ngrok':
+            if self.provider == 'cloudflare':
                 raise ValueError('Cloudflare Quick Tunnel не использует ключ')
-            self.providers['ngrok'].forget_key()
+            self.providers[self.provider].forget_key()
