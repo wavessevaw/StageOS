@@ -23,6 +23,7 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
 from .workspaces import create_workspace_app
+from .tunnel import TunnelController, HEADERS
 
 PROTOCOL = 1
 
@@ -43,23 +44,33 @@ def validate_address(value):
     return value
 
 class LanAccess:
-    def __init__(self, app, code, desktop_token, on_request=None):
+    def __init__(self, app, code, desktop_token, on_request=None, server_id='', tunnel=None):
         self.app, self.code, self.token = app, code, desktop_token
         self.on_request=on_request
+        self.server_id, self.tunnel = server_id, tunnel
 
     async def __call__(self, scope, receive, send):
         if scope['type'] != 'http':
             return await self.app(scope, receive, send)
         req = Request(scope)
         if req.url.path == '/api/network/hello' and req.method == 'GET':
-            return await JSONResponse({'product':'StageOS Server','version':'1.0.5','protocol':PROTOCOL})(scope, receive, send)
+            return await JSONResponse({'product':'StageOS Server','version':'1.0.9','protocol':PROTOCOL,'server_id':self.server_id})(scope, receive, send)
         if req.url.path.startswith('/api'):
+            if req.url.path.startswith('/api/connection'):
+                return await JSONResponse({'detail':'Управление подключением доступно только на компьютере сервера'},403)(scope,receive,send)
             if not secrets.compare_digest(req.headers.get('x-stageos-code','').encode(), self.code.encode()):
                 return await JSONResponse({'detail':'Неверный код подключения к серверу'},403)(scope,receive,send)
             if req.url.path in ('/api/auth/theatres',) and req.method == 'POST' or req.url.path.endswith('/setup'):
                 return await JSONResponse({'detail':'Создание театра и первый администратор доступны на компьютере сервера'},403)(scope,receive,send)
             if self.on_request:self.on_request(scope.get('client',('unknown',0))[0])
             headers = [(k,v) for k,v in scope['headers'] if k.lower() != b'x-stageos-token']
+            origin=req.headers.get('origin')
+            public_url=self.tunnel.status()['url'] if self.tunnel else ''
+            if origin and origin not in (str(req.base_url).rstrip('/'), public_url):
+                return await JSONResponse({'detail':'Источник запроса запрещён'},403)(scope,receive,send)
+            # ngrok rewrites Host to loopback; normalize only a validated external origin.
+            headers = [(k,v) for k,v in headers if k.lower() != b'origin']
+            if origin:headers.append((b'origin',str(req.base_url).rstrip('/').encode()))
             headers.append((b'x-stageos-token', self.token.encode()))
             scope = {**scope, 'headers': headers}
         return await self.app(scope, receive, send)
@@ -83,6 +94,8 @@ class NetworkController:
         self.firewall_state='unknown'
         self.remote_requests=0
         self.last_remote=None
+        self.server_id = secrets.token_hex(24)
+        self.tunnel = TunnelController(self.home, self)
         if self.config['mode'] == 'server':
             try:self.start_server(self.config['port'])
             except (OSError,RuntimeError) as error:
@@ -135,7 +148,7 @@ class NetworkController:
         except OSError:pass
         with self.log_lock:logs=list(self.logs);last_remote=self.last_remote;requests=self.remote_requests
         server,thread=self.server,self.thread
-        return {**self.config,'phase':self.phase,'diagnostics':self.diagnostics,'firewall_state':self.firewall_state,'logs':logs,'last_remote':last_remote,'remote_requests':requests,'windows':os.name=='nt','enabled':True,'running':bool(server and thread and server.started and thread.is_alive()),'addresses':[f'http://{a}:{self.config["port"]}' for a in sorted(addresses)],'error':self.error}
+        return {**self.config,'tunnel':self.tunnel.status(),'phase':self.phase,'diagnostics':self.diagnostics,'firewall_state':self.firewall_state,'logs':logs,'last_remote':last_remote,'remote_requests':requests,'windows':os.name=='nt','enabled':True,'running':bool(server and thread and server.started and thread.is_alive()),'addresses':[f'http://{a}:{self.config["port"]}' for a in sorted(addresses)],'error':self.error}
 
     def start_server(self, port):
         if isinstance(port,bool) or not isinstance(port,int) or not 1024 <= port <= 65535:
@@ -152,7 +165,8 @@ class NetworkController:
             listener.close();self.phase='error';self.error=str(error);self.record('error',self.error);raise
         old_code=self.config['code']
         if self.config['mode']!='server':self.config['code']=secrets.token_urlsafe(18)
-        app = LanAccess(self.workspace,self.config['code'],os.environ.get('STAGEOS_TOKEN',''),self.observe_request)
+        self.server_id = secrets.token_hex(24)
+        app = LanAccess(self.workspace,self.config['code'],os.environ.get('STAGEOS_TOKEN',''),self.observe_request,self.server_id,self.tunnel)
         server = uvicorn.Server(uvicorn.Config(app,host='0.0.0.0',port=port,log_level='warning',access_log=False,log_config=None))
         thread = threading.Thread(target=server.run,kwargs={'sockets':[listener]},daemon=True)
         self.listener,self.server,self.thread = listener,server,thread
@@ -166,6 +180,7 @@ class NetworkController:
         self.phase='running';self.record('success',f'Сервер запущен. Ожидание подключений на порту {port}')
 
     def stop_server(self):
+        self.tunnel.stop()
         was_running=bool(self.server)
         if self.server:self.server.should_exit=True
         if self.thread:self.thread.join(timeout=5)
@@ -196,7 +211,7 @@ class ConnectionDispatch:
         # Keep separate browser cookies, with no shared httpx cookie jar between users.
         address,code=self.c.config['address'],self.c.config['code']
         headers={k:v for k,v in req.headers.items() if k.lower() in ('content-type','cookie','accept','if-none-match')}
-        headers.update({'X-StageOS-Code':code,'Origin':address})
+        headers.update({'X-StageOS-Code':code,**HEADERS})
         try:
             async with httpx.AsyncClient(timeout=120,follow_redirects=False,trust_env=False) as client:
                 response=await client.request(req.method,address+scope['path']+('?' + scope['query_string'].decode() if scope['query_string'] else ''),headers=headers,content=await req.body())
@@ -218,7 +233,11 @@ def create_desktop_app(home=None,static_dir=None,bootstrap_file=None):
     async def invalid(_,error):return JSONResponse({'detail':'Проверьте настройки подключения'},422)
 
     @app.get('/api/connection')
-    def status():return controller.status()
+    def status(req:Request):
+        result=controller.status()
+        try:result['can_manage_tunnel']=workspace.state.registry.current(req)['role']=='admin' and result['mode']=='server'
+        except HTTPException:result['can_manage_tunnel']=False
+        return result
 
     @app.get('/api/connection/diagnostics')
     def diagnostics():return controller.inspect()
@@ -237,7 +256,7 @@ def create_desktop_app(home=None,static_dir=None,bootstrap_file=None):
                 address=validate_address(body.get('address',''));code=body.get('code','')
                 if not isinstance(code,str) or not 8 <= len(code) <= 128 or not code.isascii():raise ValueError('Укажите код подключения к серверу')
                 # Probe before switching; a wrong code must never replace a working connection.
-                async with httpx.AsyncClient(timeout=10,trust_env=False) as client:
+                async with httpx.AsyncClient(timeout=10,trust_env=False,headers=HEADERS) as client:
                     hello=await client.get(address+'/api/network/hello');hello.raise_for_status()
                     if hello.json().get('protocol')!=PROTOCOL or hello.json().get('product')!='StageOS Server':raise ValueError('Это не совместимый StageOS Server')
                     check=await client.get(address+'/api/auth/theatres',headers={'X-StageOS-Code':code});check.raise_for_status()
@@ -259,7 +278,7 @@ def create_desktop_app(home=None,static_dir=None,bootstrap_file=None):
         except httpx.HTTPStatusError as error:
             raise HTTPException(422,'Неверный код подключения' if error.response.status_code==403 else 'Сервер отклонил подключение')
         except httpx.HTTPError:raise HTTPException(503,'Не удалось подключиться. Проверьте адрес, сеть и брандмауэр сервера.')
-        result=JSONResponse(controller.status())
+        result=JSONResponse(status(req))
         # Local and server modes share the same registry and theatre identity.
         # Clear only when entering/leaving/reconfiguring a remote connection.
         if previous_mode=='client' or mode=='client':
@@ -285,6 +304,28 @@ def create_desktop_app(home=None,static_dir=None,bootstrap_file=None):
         controller.record('success','Windows: правило брандмауэра создано и проверено')
         controller.inspect()
         return result
+
+    @app.post('/api/connection/tunnel')
+    def tunnel(req:Request,body:dict):
+        user=workspace.state.registry.current(req)
+        if user['role']!='admin':raise HTTPException(403,'Требуются права администратора')
+        if controller.config['mode']!='server' or not controller.status()['running']:
+            raise HTTPException(422,'Сначала запустите сервер')
+        with controller.lock:
+            try:
+                action=body.get('action')
+                if action=='install':controller.tunnel.install()
+                elif action=='start':
+                    if not isinstance(body.get('remember',False),bool):raise ValueError('Проверьте настройки подключения')
+                    controller.tunnel.start(body.get('authtoken',''),body.get('remember',False))
+                elif action=='stop':controller.tunnel.stop()
+                elif action=='forget':controller.tunnel.forget_key()
+                else:raise ValueError('Выберите действие туннеля')
+            except (ValueError,OSError,RuntimeError) as error:
+                # Exceptions from ngrok itself are never returned, as they may contain credentials.
+                if isinstance(error,ValueError):raise HTTPException(422,str(error)) from None
+                raise HTTPException(422,'Не удалось изменить состояние туннеля. Повторите действие') from None
+        return status(req)
     return app
 
 

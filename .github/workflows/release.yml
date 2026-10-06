@@ -59,7 +59,7 @@ jobs:
           fi
           gh release create "$tag" release-assets/* \
             --target "$GITHUB_SHA" \
-            --title "StageOS $version — исправление предложений Qwen" \
+            --title "StageOS $version — интернет-туннель и многодневные планы" \
             --notes-file "docs/releases/$version.md" \
             --draft
           gh release edit "$tag" --draft=false

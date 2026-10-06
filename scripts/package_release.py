@@ -10,7 +10,7 @@ files=[(p,'StageOS/Windows-Portable/'+p.relative_to(PORTABLE).as_posix()) for p 
 for name in ['README.md','README_EN.md','README_RU.md','ARCHITECTURE.md','RELEASE_GATE_1_0_RU.md','RELEASE_AUDIT_RU.md','TEST_RESULTS.md','BUILD_RESULTS.md','THIRD_PARTY.md','release-test-results.txt','release-ui-results.txt','release-empty-ui-results.txt','release-accounts-ui-results.txt','release-network-ui-results.txt','release-static-results.txt','release-build-results.txt']:
  files.append((ROOT/name,'StageOS/'+name))
 for p in sorted((ROOT/'docs/media').glob('*.svg')):files.append((p,'StageOS/docs/media/'+p.name))
-for name in ['SERVER_STATUS_RU.md','EVENT_PLANNING_RU.md']:
+for name in ['SERVER_STATUS_RU.md','EVENT_PLANNING_RU.md','INTERNET_TUNNEL_RU.md']:
  files.append((ROOT/'docs'/name,'StageOS/docs/'+name))
 files.append((ROOT/'docs/SERVER_SETUP_RU.md','StageOS/docs/SERVER_SETUP_RU.md'))
 files.append((ROOT/'docs/ACCOUNTS_RU.md','StageOS/docs/ACCOUNTS_RU.md'))

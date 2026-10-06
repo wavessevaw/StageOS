@@ -1,4 +1,32 @@
 import {test,expect} from '@playwright/test';
+for(const language of ['ru','en'])test(`Internet tunnel installation, verified address and stop (${language})`,async({page})=>{
+ await page.addInitScript(lang=>localStorage.setItem('stageos-language',lang),language);
+ const state:any={mode:'server',port:8765,running:true,windows:true,phase:'running',can_manage_tunnel:true,code:'test-connection-code',addresses:['http://127.0.0.1:8765'],logs:[],tunnel:{phase:'stopped',installed:false,can_install:true,saved_key:false,verified:false,url:''}};
+ const token='test_fake_authtoken_0123456789';
+ await page.route('**/api/connection',route=>route.fulfill({json:state}));
+ await page.route('**/api/connection/diagnostics',route=>route.fulfill({json:{http_ok:true}}));
+ await page.route('**/api/connection/tunnel',async route=>{
+  const body=route.request().postDataJSON();
+  if(body.action==='install')state.tunnel.installed=true;
+  if(body.action==='start'){expect(body.authtoken).toBe(token);state.tunnel={...state.tunnel,phase:'connected',verified:true,url:'https://test.ngrok.app'};}
+  if(body.action==='stop')state.tunnel={...state.tunnel,phase:'stopped',verified:false,url:''};
+  await route.fulfill({json:state});
+ });
+ await page.goto('/');
+ const name=(ru:string,en:string)=>language==='ru'?ru:en;
+ await page.getByRole('button',{name:name('Настроить подключение','Configure connection'),exact:true}).click();
+ await expect(page.getByRole('heading',{name:name('Доступ через Интернет','Internet access')})).toBeVisible();
+ await page.getByRole('button',{name:name('Установить ngrok','Install ngrok'),exact:true}).click();
+ await expect(page.getByText(name('Проверенный внешний адрес','Verified public address'),{exact:true})).toHaveCount(0);
+ await page.getByLabel(name('Authtoken ngrok','ngrok Authtoken'),{exact:true}).fill(token);
+ await page.getByRole('button',{name:name('Запустить интернет-туннель','Start Internet tunnel'),exact:true}).click();
+ await expect(page.getByLabel(name('Authtoken ngrok','ngrok Authtoken'),{exact:true})).toHaveValue('');
+ await expect(page.getByText('https://test.ngrok.app',{exact:true})).toBeVisible();
+ await page.screenshot({path:test.info().outputPath(`tunnel-${language}.png`),fullPage:true});
+ await page.getByRole('button',{name:name('Остановить туннель','Stop tunnel'),exact:true}).click();
+ await expect(page.getByText('https://test.ngrok.app',{exact:true})).toHaveCount(0);
+ await expect(page.locator('.server-tunnel')).toContainText(name('Интернет-туннель остановлен','Internet tunnel stopped'));
+});
 test('StageOS Server → connect with code → sign in → shared changes refresh both computers',async({page,browser})=>{
  const hostContext=await browser.newContext({baseURL:'http://127.0.0.1:8883'});const host=await hostContext.newPage();const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));host.on('pageerror',e=>errors.push(e.message));
  const created=await host.request.post('/api/auth/theatres',{data:{theatre_name:'Общий театр',name:'Администратор сервера',login:'admin',password:'test-password'}});expect(created.ok()).toBeTruthy();const tid=(await created.json()).id;

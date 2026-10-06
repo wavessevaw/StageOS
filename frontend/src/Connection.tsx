@@ -1,5 +1,6 @@
 import React,{useEffect,useRef,useState} from 'react';
 import {tr,message} from './i18n';
+import {Tunnel} from './Tunnel';
 type Obj=Record<string,any>;
 const headers=()=>({'Content-Type':'application/json','X-StageOS-Token':sessionStorage.getItem('stageos-token')||''});
 async function request(path:string,method='GET',body?:Obj){
@@ -63,6 +64,7 @@ export function Connection({initial,onClose}:{initial:Obj,onClose:()=>void}){
  {mode==='local'&&<p className="muted">{tr('Локальная база сохранена. Другие компьютеры не подключаются.')}</p>}
  <div className="server-actions"><button className="primary" disabled={!!busy}>{tr(mode==='server'?(running&&Number(port)===state.port?'Сервер запущен · проверить':'Запустить сервер'):mode==='client'?'Проверить и подключиться':'Использовать локальную базу')}</button><button type="button" disabled={!!busy} onClick={()=>changed?location.reload():onClose()}>{tr('Продолжить')}</button></div>
  </form>
+ {mode==='server'&&<Tunnel state={state} onUpdate={setState}/>}
  {mode==='server'&&<div className="server-journal"><h3>{tr('Журнал сервера')}</h3><div className="server-terminal" ref={terminal} role="log" aria-label={tr('Журнал сервера')} aria-live="polite">{logs.length?logs.map((line,i)=><div key={line.time+i} className={line.level}><time>{new Date(line.time).toLocaleTimeString()}</time><span>{message(line.message)}</span></div>):<p>{tr('Ожидание действий…')}</p>}</div></div>}
  </section>;
 }

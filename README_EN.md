@@ -127,3 +127,8 @@ Open Calendar → **Export schedule**. Choose up to 31 days, current filters, st
 Database backup/export is separate: Settings → Download backup. Restore with Open existing database. A failed import leaves the active database unchanged; a successful import creates a managed copy and persists the selection for future launches.
 
 Version 1.0.2 fixes imported source information and production credits, displays eligible performers without assigning casts, and clearly marks unspecified preparation time.
+
+
+## Internet access in 1.0.9
+
+StageOS Server manages an ngrok relay with verified download, optional Windows-encrypted token storage, start/stop, status and a verified public HTTPS address. An ngrok account and Authtoken are required on the host; clients use the address, connection code and personal login. The database stays on the host. Provider availability and quotas apply; real account-backed Internet access has not been tested. See [release notes](docs/releases/1.0.9.md).

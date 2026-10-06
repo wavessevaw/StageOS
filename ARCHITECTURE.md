@@ -92,3 +92,8 @@ SQLite databases and accounts.sqlite remain on the host. Thread locks serialize 
 Request stores removed_tasks, extra_tasks and role_assignments in the event JSON. Production passports are unchanged. CP-SAT reconnects dependencies across removed stages, rejects cycles, pins custom stage times, and recalculates reservations. Main event cannot be removed. Preview fingerprint validation and transactional save protect the complete plan.
 
 Confirmed history is grouped into relative-time templates per production/venue/event type (latest 200 eligible events). Two matching records are required. Forced, cancelled, draft and pending events are excluded. Candidates pass the deterministic preview engine again. Optional LLM only selects a validated candidate ID and explains it. No neural weight fine-tuning or automatic event writes occur. Ollama downloads the optional small model outside the application archive.
+
+
+## Internet relay 1.0.9
+
+`backend/tunnel.py` owns a separately downloaded ngrok 3.39.11 Windows x64 process. Download SHA-256 is pinned. The agent forwards only the existing LAN gateway, preserving connection code and theatre accounts. The public hello response carries a random per-server-start identity; a verified address also requires authenticated theatre-list access. Management is local-admin-only, and the LAN gateway rejects every `/api/connection` route. Host closes its agent before stopping the listener. Credentials are optional Windows DPAPI files and passed to the agent only via its environment. Config and logs contain no token; request inspection and remote management are disabled. Provider terminates public TLS, so this is not end-to-end encryption. No account-backed external smoke test has been performed.
