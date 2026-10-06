@@ -4,10 +4,13 @@ test('English switch persists in database and exports real PDF and PNG',async({p
   test.setTimeout(60000);page.setDefaultTimeout(10000);
   await request.post('/api/demo');await page.goto('/');
   try{
-    await page.getByLabel('Язык приложения',{exact:true}).selectOption('en');
+    const saved = page.waitForResponse(response=>response.url().endsWith('/api/settings/interface')&&response.request().method()==='PUT');
+    await page.locator('header').getByLabel('Язык приложения',{exact:true}).selectOption('en');
+    expect((await saved).ok()).toBeTruthy();
     await expect(page.getByRole('button',{name:/^Calendar$/})).toBeVisible();
+    expect((await(await request.get('/api/bootstrap')).json()).language).toBe('en');
     await page.evaluate(()=>localStorage.clear());await page.reload();
-    await expect(page.getByLabel('Application language',{exact:true})).toHaveValue('en');
+    await expect(page.locator('header').getByLabel('Application language',{exact:true})).toHaveValue('en');
     expect((await(await request.get('/api/bootstrap')).json()).language).toBe('en');
     await page.getByRole('button',{name:'Calendar',exact:true}).click();
     await page.getByRole('button',{name:'Export schedule',exact:true}).click();
