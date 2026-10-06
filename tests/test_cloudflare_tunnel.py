@@ -65,8 +65,8 @@ def test_process_exit_is_not_connected(tmp_path):
  assert t.status()['phase']=='error' and not t.status()['verified'] and not t.status()['url']
 
 def test_default_provider_switch_stops_agent_and_persists(tmp_path):
- host=Mock();t=InternetTunnelController(tmp_path,host);assert t.status()['provider']=='cloudflare'
- t.providers['cloudflare'].stop=Mock();t.select('ngrok');t.providers['cloudflare'].stop.assert_called_once()
+ host=Mock();t=InternetTunnelController(tmp_path,host);assert t.status()['provider']=='probross'
+ t.providers['probross'].stop=Mock();t.select('ngrok');t.providers['probross'].stop.assert_called_once()
  assert InternetTunnelController(tmp_path,host).status()['provider']=='ngrok'
  with pytest.raises(ValueError):t.select('unknown')
  assert t.status()['provider']=='ngrok'
@@ -85,6 +85,7 @@ def test_local_select_and_remote_management_denied(network):
 
 def test_cloudflare_origin_validation_preserves_login(network):
  host,local,clients,tid,address,code=network
+ host.state.network.tunnel.select('cloudflare')
  agent=host.state.network.tunnel.providers['cloudflare'];agent.update(url='https://owned.trycloudflare.com',phase='connected',verified=True)
  headers={'X-StageOS-Code':code,'Origin':'https://owned.trycloudflare.com'}
  response=httpx.post(address+'/api/auth/login',headers=headers,json={'theatre_id':tid,'login':'Админ','password':'test-password'})
