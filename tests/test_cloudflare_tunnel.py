@@ -65,8 +65,8 @@ def test_process_exit_is_not_connected(tmp_path):
  assert t.status()['phase']=='error' and not t.status()['verified'] and not t.status()['url']
 
 def test_default_provider_switch_stops_agent_and_persists(tmp_path):
- host=Mock();t=InternetTunnelController(tmp_path,host);assert t.status()['provider']=='cloudflare'
- t.providers['cloudflare'].stop=Mock();t.select('ngrok');t.providers['cloudflare'].stop.assert_called_once()
+ host=Mock();t=InternetTunnelController(tmp_path,host);assert t.status()['provider']=='probross'
+ t.providers['probross'].stop=Mock();t.select('ngrok');t.providers['probross'].stop.assert_called_once()
  assert InternetTunnelController(tmp_path,host).status()['provider']=='ngrok'
  with pytest.raises(ValueError):t.select('unknown')
  assert t.status()['provider']=='ngrok'
