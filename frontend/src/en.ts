@@ -355,9 +355,9 @@ const pairs = `Назначить|Schedule
 Провайдер|Provider
 Адрес сервера модели|Model endpoint
 Спросить|Ask
-Модель думает…|Model is thinking…
-Задайте вопрос о театре или предложите новое событие.|Ask about the theatre or propose an event.
-Модель использует данные StageOS; запись — только после вашего подтверждения.|The model uses StageOS data. Saving requires your confirmation.
+Проверяем данные…|Checking data…
+Задайте вопрос о постановках, сотрудниках или расписании.|Ask about productions, employees or the schedule.
+Помощник отвечает по базе выбранного театра. Для создания события откройте «Назначить».|The assistant uses the selected theatre database. To create an event, open Schedule.
 Диагностика|Diagnostics
 Проверено по локальной базе|Checked against local data
 Повторить проверку|Run checks again
@@ -390,7 +390,7 @@ const pairs = `Назначить|Schedule
 Каждая штука — отдельная единица в базе. Пересечения проверяются по конкретным единицам. Созданное имущество остаётся в каталоге, даже если отменить редактирование постановки.|Each unit is an individual database resource. Conflicts are checked per unit. Created assets stay in the directory even if passport editing is cancelled.
 Ctrl + щелчок — выбрать несколько или снять выбор|Ctrl + click to select multiple items or clear selection
 Ctrl + щелчок — несколько ролей|Ctrl + click to select multiple roles
-Измените начало или длительность этапа: зависимости и занятость пересчитываются. Время спектакля остаётся фиксированным. Явно заданные времена отмечены как закреплённые.|Edit a stage start or duration to recalculate dependencies and bookings. Performance time stays fixed. Explicit times are marked as fixed.
+Укажите дату и время каждого этапа, включая предыдущие дни. Измените начало или длительность этапа: зависимости и занятость пересчитываются. Время спектакля остаётся фиксированным. Явно заданные времена отмечены как закреплённые.|Edit a stage start or duration to recalculate dependencies and bookings. Performance time stays fixed. Explicit times are marked as fixed.
 Экспорт расписания|Export schedule
 Начало периода|Period starts
 Конец периода|Period ends
@@ -409,7 +409,11 @@ Ctrl + щелчок — несколько ролей|Ctrl + click to select mul
 А|A
 Б|B
 АД|AD
-Т|T`;
+Т|T
+Квалификации сотрудника|Employee qualifications
+Выберите только подтверждённые квалификации. Они определяют доступные назначения.|Select only verified qualifications. They determine eligible assignments.
+Квалификация|Qualification
+`;
 export const english:Record<string,string>=Object.fromEntries(pairs.split('\n').map(line=>line.split('|')));
 Object.assign(english,{
  "Язык":"Language","Язык приложения":"Application language",
@@ -539,3 +543,14 @@ Object.assign(english, {
  'В постановке нет такого подразделения':'This department is not included in the production',
 });
 Object.assign(english, {'Один исполнитель в обоих составах. Проверьте наличие замены.':'One performer is in both casts. Check replacement availability.'});
+
+
+Object.assign(english, {
+ 'Управление квалификациями':'Manage qualifications',
+ 'Квалификации определяют, на какие обязанности можно назначить сотрудника.':'Qualifications determine which duties an employee can perform.',
+ 'Новая квалификация':'New qualification',
+ 'Где используется':'Where used',
+ 'Сначала измените назначения этой квалификации':'Update assignments using this qualification first',
+});
+
+Object.assign(english, {' · допущен к роли':' · eligible for this role'});

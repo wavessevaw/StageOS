@@ -1,0 +1,20 @@
+import {test,expect} from '@playwright/test';
+test('A preparation anchor can move several days before the performance',async({page,request})=>{
+ await request.post('/api/demo');
+ await page.goto('/');
+ await page.getByLabel('Дата',{exact:true}).fill('2027-04-06');
+ await page.getByRole('button',{name:'Проверить и назначить',exact:true}).click();
+ const modal=page.getByRole('dialog',{name:'Предварительный план'});
+ await expect(modal).toBeVisible();
+ const options=await modal.locator('.event-role-row select').first().locator('option[value]:not([value=""])').evaluateAll(nodes=>nodes.map(n=>n.getAttribute('data-eligible')==='true'));
+ const firstUnqualified=options.indexOf(false);
+ expect(firstUnqualified<0 || !options.slice(firstUnqualified).includes(true)).toBeTruthy();
+ const departure=modal.getByLabel('Начало Выезд',{exact:true});
+ await departure.fill('2027-04-03T08:00');
+ await modal.getByRole('heading',{name:'Производственный план',exact:true}).click();
+ await expect(departure).toHaveValue('2027-04-03T08:00');
+ const main=modal.getByLabel('Начало Спектакль',{exact:true});
+ await expect(main).toHaveValue('2027-04-06T19:00');
+ const events=await(await request.get('/api/events?start=2027-04-03&end=2027-04-07')).json();
+ expect(events).toHaveLength(0);
+});

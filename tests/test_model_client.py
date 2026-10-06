@@ -48,7 +48,7 @@ def test_compatible_server_can_decline_json_mode():
 
 @pytest.mark.parametrize('raw, status', [
     ('<think>Не показывать</think>```json\n{"answer":"По базе: Дмитрий Петров"}\n```', 200),
-    ('По базе: Дмитрий Петров', 200), ('', 502), ('{"answer":', 502),
+    ('По базе: Дмитрий Петров', 200), ('', 200), ('{"answer":', 200),
 ])
 def test_assistant_ollama_response_does_not_mutate_database(ctx, monkeypatch, raw, status):
     c, S, b, rs, r = ctx
@@ -64,7 +64,9 @@ def test_assistant_ollama_response_does_not_mutate_database(ctx, monkeypatch, ra
     response = c.post('/api/assistant', json={'text': 'Кто ведёт звук на Северном ветре?'})
     assert response.status_code == status, response.text
     if status == 200:
-        assert response.json()['answer'] == 'По базе: Дмитрий Петров'
+        assert response.json()['source'] == 'database'
+        assert not response.json()['model_accepted']
+        assert response.json()['answer'] != 'По базе: Дмитрий Петров'
         assert '<think>' not in response.text
     with S() as session: assert session.scalar(select(func.count(Event.id))) == before
 

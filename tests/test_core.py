@@ -292,7 +292,7 @@ def test_windows_and_ai_off(ctx):
     for w in windows:
         assert c.post("/api/preview", json=w["request"]).json()["status"] != "CONFLICT"
     assert (
-        "отключён"
+        "Назначить"
         in c.post("/api/assistant", json={"text": "Создай событие"}).json()["answer"]
     )
     assert confirm(c, req).status_code == 200
@@ -569,8 +569,9 @@ def test_llm_protocol_is_read_only(ctx, monkeypatch):
         json={"text": "Поставь Северный ветер 16 октября в Большом зале в 19:00"},
     )
     assert out.status_code == 200, out.text
-    assert out.json()["preview"]["title"] == "Северный ветер"
-    assert len(captured[0]["messages"][0]["content"]) < 100000
+    assert "preview" not in out.json()
+    assert out.json()["source"] == "planning_ui"
+    assert "answer" in out.json()
     with S() as s:
         assert count == s.scalar(select(func.count(Event.id)))
 

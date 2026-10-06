@@ -152,13 +152,13 @@ export default function PassportEditor({
             ["responsibles", "groups", "crew"].includes(String(root)) &&
             path.length === 2
           )
-            return r.department === path[1] || (r.data.qualification || []).includes(path[1]);
+            return !r.data?.retired && (r.data?.qualification || []).includes(path[1]);
           if (
             root === "orchestra_versions" ||
             (root === "overrides" && last === "orchestra")
           )
-            return r.department === "Оркестр";
-          if (root === "roles") return r.department === "Артисты";
+            return !r.data?.retired && (r.data?.qualification || []).includes("Оркестр");
+          if (root === "roles") return !r.data?.retired && (r.data?.qualification || []).includes("Артисты");
           return true;
         })
       : null;

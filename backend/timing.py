@@ -17,15 +17,23 @@ DEPS = {
 
 def retime(tasks, overrides, start, run_through=False, dependencies=None):
     deps=DEPS if dependencies is None else dependencies
-    origin = start.replace(hour=0, minute=0) - timedelta(days=1)
     names = {t['name'] for t in tasks}
     if set(overrides)-names:
         raise ValueError('Неизвестный этап производственного плана')
     model=cp_model.CpModel(); starts={}; ends={}; intervals={}; penalties=[]
-    baseline={t['name']:int((t['start']-origin).total_seconds()/60) for t in tasks}
     durations = {t['name']: overrides[t['name']].duration
                  if t['name'] in overrides and overrides[t['name']].duration is not None
                  else int((t['end']-t['start']).total_seconds()/60) for t in tasks}
+    anchors = [start] + [t['start'] for t in tasks] + [t['end'] for t in tasks]
+    anchors += [edit.start for edit in overrides.values() if edit.start is not None]
+    earliest, latest = min(anchors), max(anchors)
+    if latest - earliest > timedelta(days=31):
+        raise ValueError('Производственный план должен укладываться в 31 день')
+    # Include explicit anchors, long tasks and upstream preparation in the domain.
+    padding = sum(durations.values()) + 1440
+    origin = earliest.replace(second=0, microsecond=0) - timedelta(minutes=padding)
+    horizon = int((latest-origin).total_seconds()/60) + padding
+    baseline={t['name']:int((t['start']-origin).total_seconds()/60) for t in tasks}
     # A single edited anchor shifts the preferred times of its successors, not the performance.
     preferred=dict(baseline)
     for name, edit in overrides.items():
@@ -59,7 +67,7 @@ def retime(tasks, overrides, start, run_through=False, dependencies=None):
     for t in tasks:
         n=t['name']; edit=overrides.get(n)
         dur=durations[n]
-        a=model.new_int_var(0,4320,n); b=model.new_int_var(0,4320,n+'_end')
+        a=model.new_int_var(0,horizon,n); b=model.new_int_var(0,horizon,n+'_end')
         starts[n]=a; ends[n]=b; intervals[n]=model.new_interval_var(a,dur,b,n)
         if n in ['Спектакль','Репетиция']:
             model.add(a==baseline[n])
@@ -68,7 +76,7 @@ def retime(tasks, overrides, start, run_through=False, dependencies=None):
             model.add(a==baseline[n])
         elif edit and edit.start is not None:
             model.add(a==int((edit.start-origin).total_seconds()/60))
-        diff=model.new_int_var(0,10000,n+'_deviation'); model.add_abs_equality(diff,a-preferred[n]); penalties.append(diff)
+        diff=model.new_int_var(0,horizon * 2,n+'_deviation'); model.add_abs_equality(diff,a-preferred[n]); penalties.append(diff)
     for n in names:
         for dep in deps.get(n,[]):
             if dep in names: model.add(starts[n]>=ends[dep]+(10 if n=='Демонтаж' else 0))

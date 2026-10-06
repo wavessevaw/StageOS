@@ -1425,3 +1425,16 @@ details > form {
 .cast-proposal select {max-width: 420px; margin: 8px;}
 .cast-candidates {display: grid; grid-template-columns: repeat(auto-fit,minmax(220px,1fr)); gap: 8px; margin: 12px 0;}
 .cast-candidates label {display: flex; align-items: center; gap: 8px;}
+
+/* Rehearsal employee cards keep checkbox, name and profession together. */
+.rehearsal-person {display:grid;grid-template-columns:16px minmax(0,1fr);gap:10px;align-items:start;padding:12px;border:1px solid #dce5df;border-radius:10px;min-width:0;cursor:pointer;}
+.rehearsal-person input[type="checkbox"] {width:15px;min-width:15px;margin:3px 0 0;}
+.rehearsal-person span {min-width:0;overflow-wrap:anywhere;}
+.rehearsal-person b,.rehearsal-person small {display:block;}
+.rehearsal-person small {margin-top:4px;color:#718077;}
+.schedule-row input[type="datetime-local"] {width:230px;flex:0 1 230px;}
+.schedule-row input[type="number"] {width:90px;flex:0 1 90px;}
+
+.qualification-picker {border:1px solid #dce5df;border-radius:10px;padding:12px;margin:14px 0;display:flex;flex-wrap:wrap;gap:10px;}
+.qualification-picker p {flex-basis:100%;margin:0;}
+.qualification-picker label {display:flex;align-items:center;gap:7px;}

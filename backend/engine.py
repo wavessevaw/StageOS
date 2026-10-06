@@ -13,7 +13,7 @@ from .production_editor import cast_people
 
 class TaskTiming(BaseModel):
     start: datetime | None = None
-    duration: int | None = Field(default=None, ge=1, le=1440)
+    duration: int | None = Field(default=None, ge=1, le=10080)
 
     @field_validator("start")
     @classmethod
@@ -26,7 +26,7 @@ class ExtraTask(BaseModel):
     name: str = Field(min_length=1,max_length=100)
     department: str = Field(default='Все',min_length=1,max_length=40)
     start: datetime
-    duration: StrictInt = Field(ge=1,le=1440)
+    duration: StrictInt = Field(ge=1,le=10080)
     after: str | None = None
     before: str | None = None
 
@@ -537,16 +537,14 @@ def preview(s, r: Request, production_data=None):
                     "ERROR",
                 )
             )
-        if any(
-            x["actual_id"] == actual and (x["responsible_id"] != rid or (dept == "Артисты" and x["role"] != role)) for x in assignments
-        ):
-            conflicts.append(
-                issue(
-                    "multiple_roles",
-                    person.name,
-                    "Один человек назначен на несколько одновременных позиций",
-                )
-            )
+        duplicates = [x for x in assignments if x["actual_id"] == actual and
+                      (x["responsible_id"] != rid or x["role"] != role)]
+        if duplicates:
+            actor_overlap = dept == "Артисты" and any(x["department"] == "Артисты" for x in duplicates)
+            conflicts.append(issue("multiple_roles", person.name,
+                "Один артист назначен на разные роли" if actor_overlap else
+                "Совмещение обязанностей: проверьте возможность выполнения одним сотрудником",
+                "ERROR" if actor_overlap else "WARNING"))
         assignments.append(
             {
                 "role": role,
@@ -717,8 +715,8 @@ def preview(s, r: Request, production_data=None):
                 book(a['actual_id'],planned['start'],planned['end'],a['role'])
                 a['call']=min(a['call'],planned['start'].isoformat())
     book(v.id, techstart, techend, v.name)
-    opening = r.start.replace(hour=0,minute=0) + timedelta(hours=v.data.get("opening", 8))
-    closing = r.start.replace(hour=0,minute=0) + timedelta(hours=v.data.get("closing", 24))
+    opening = techstart.replace(hour=0,minute=0) + timedelta(hours=v.data.get("opening", 8))
+    closing = techend.replace(hour=0,minute=0) + timedelta(hours=v.data.get("closing", 24))
     if techstart < opening:
         conflicts.append(
             issue(
@@ -978,11 +976,12 @@ def saved_event_plan(s, ev):
         site_data={**(site.data if site else {}),**venue.data}
         venue_booking=bs.get(ev.venue_id)
         if venue_booking:
-            day=ev.start.replace(hour=0,minute=0)
+            first_day=venue_booking['start'].replace(hour=0,minute=0)
+            last_day=venue_booking['end'].replace(hour=0,minute=0)
             conflicts=[c for c in conflicts if c['code'] not in ['setup','closing','room_capacity']]
-            if venue_booking['start']<day+timedelta(hours=site_data.get('opening',8)):
+            if venue_booking['start']<first_day+timedelta(hours=site_data.get('opening',8)):
                 conflicts.append(issue('setup',venue.name,'Подготовка начинается до открытия площадки'))
-            if venue_booking['end']>day+timedelta(hours=site_data.get('closing',24)):
+            if venue_booking['end']>last_day+timedelta(hours=site_data.get('closing',24)):
                 conflicts.append(issue('closing',venue.name,'Работы завершаются после закрытия площадки'))
             if venue.kind=='Room' and len({a['actual_id'] for a in plan['assignments']})>site_data.get('capacity',0):
                 conflicts.append(issue('room_capacity',venue.name,'Участники не помещаются в помещении'))

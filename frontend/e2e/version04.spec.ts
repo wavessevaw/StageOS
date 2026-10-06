@@ -14,9 +14,13 @@ test("Selective rehearsal staff and note", async ({ page, request }) => {
       }),
     });
   await section.getByRole("button", { name: "Балет", exact: true }).click();
-  await section.locator(".personline input[type=checkbox]").first().check();
+  await section.locator(".rehearsal-person input[type=checkbox]").first().check();
+  const card = section.locator('.rehearsal-person').first();
+  const box = await card.boundingBox();
+  const text = await card.locator('span').boundingBox();
+  expect(box && text && text.x >= box.x && text.x + text.width <= box.x + box.width + 1).toBeTruthy();
   await section.getByRole("button", { name: "Звук", exact: true }).click();
-  await section.locator(".personline input[type=checkbox]").first().check();
+  await section.locator(".rehearsal-person input[type=checkbox]").first().check();
   await page
     .getByLabel("Примечание к событию", { exact: true })
     .fill("Балет и звук. Только выбранные люди.");

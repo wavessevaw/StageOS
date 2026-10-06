@@ -1,3 +1,4 @@
+import QualificationManager from "./QualificationManager";
 import {HistorySuggestions,SmallModelSettings} from './Suggestions';
 import {CastProposal} from './CastProposal';
 import {saveFile} from './saveFile';
@@ -227,6 +228,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
     productions: Obj[] = boot?.productions || [];
   const resource = (id: number) => resources.find((r) => r.id === id);
   const prod = productions.find((p) => p.id === form.production_id);
+  const [showQualifications,setShowQualifications]=useState(false);
   const departments = [
     ...new Set([...(boot?.departments || []),
       ...resources.filter((r) => r.kind === "Person").map((r) => r.department)]),
@@ -558,9 +560,9 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
     return (
       <div className="timeline">
         <div className="timeline-axis">
-          <span>{tr(time(new Date(min).toISOString()))}</span>
+          <span>{tr(date(new Date(min).toISOString()))} {tr(time(new Date(min).toISOString()))}</span>
           <span>{tr(time(new Date((max + min) / 2).toISOString()))}</span>
-          <span>{tr(time(new Date(max).toISOString()))}</span>
+          <span>{tr(date(new Date(max).toISOString()))} {tr(time(new Date(max).toISOString()))}</span>
         </div>
         {tasks.map((t, i) => (
           <div className="timeline-row" key={i}>
@@ -578,11 +580,11 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
                     ) + "%",
                   background: ["#5169c7", "#23846f", "#bc8750"][i % 3],
                 }}
-                title={`${time(t.start)}–${time(t.end)}`}
+                title={`${date(t.start)} ${time(t.start)}–${date(t.end)} ${time(t.end)}`}
               />
             </div>
             <small>
-              {tr(time(t.start))}{tr("–")}{tr(time(t.end))}
+              {tr(date(t.start))} {tr(time(t.start))}{tr("–")}{tr(date(t.end))} {tr(time(t.end))}
             </small>
           </div>
         ))}
@@ -743,7 +745,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
                   }
                 />{tr("Прогон в день спектакля: 11:00–14:00, обед, вечерний сбор")}</label>
             ))}
-            <p className="muted">{tr("Измените начало или длительность этапа: зависимости и занятость пересчитываются. Время спектакля остаётся фиксированным. Явно заданные времена отмечены как закреплённые.")}</p>
+            <p className="muted">{tr("Укажите дату и время каждого этапа, включая предыдущие дни. Измените начало или длительность этапа: зависимости и занятость пересчитываются. Время спектакля остаётся фиксированным. Явно заданные времена отмечены как закреплённые.")}</p>
             <AddStage key={p.request.production_id+":"+p.start} plan={p} busy={busy} onChange={changes=>changePlan(p,changes)}/>
             <div key={p.fingerprint} className="schedule-editor">
               {p.tasks.map((t: Obj) => (
@@ -776,8 +778,8 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
                   <input
                     aria-label={"Длительность " + t.name}
                     type="number"
-                    min="1"
-                    max="1440"
+                    min={t.name === "Репетиция" ? 15 : 1}
+                    max={t.name === "Репетиция" ? 480 : 10080}
                     defaultValue={Math.round(
                       (+new Date(t.end) - +new Date(t.start)) / 60000,
                     )}
@@ -786,7 +788,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
                       const n = +e.target.value;
                       e.target.value=String(Math.round((+new Date(t.end)-+new Date(t.start))/60000));
                       if (
-                        Number.isInteger(n) && n > 0 && n <= 1440 &&
+                        Number.isInteger(n) && n >= (t.name === "Репетиция" ? 15 : 1) && n <= (t.name === "Репетиция" ? 480 : 10080) &&
                         n !==
                           Math.round(
                             (+new Date(t.end) - +new Date(t.start)) / 60000,
@@ -807,7 +809,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
                       }
                     }}
                   />
-                  <small>{tr("до ")}{tr(time(t.end))}</small>
+                  <small>{tr("до ")}{tr(date(t.end))} {tr(time(t.end))}</small>
                   {!["Спектакль","Репетиция"].includes(t.name)&&<button disabled={busy} aria-label={tr("Удалить этап")+" "+t.name} onClick={()=>changePlan(p,removeStage(p,t.name))}>{tr("Удалить этап")}</button>}
                   {p.request.task_overrides?.[t.name] && (
                     <button
@@ -1260,10 +1262,10 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
                           .filter(
                             (r) =>
                               r.kind === "Person" &&
-                              r.department === rehearsalDept,
+                              !r.data?.retired && (r.data?.qualification || []).includes(rehearsalDept),
                           )
                           .map((r) => (
-                            <label className="personline" key={r.id}>
+                            <label className="rehearsal-person" key={r.id}>
                               <input
                                 type="checkbox"
                                 checked={(
@@ -1288,8 +1290,8 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
                                   );
                                 }}
                               />
-                              {r.name}
-                              <small>{tr(ru(r.data.specialization))}</small>
+                              <span><b>{r.name}</b>
+                              <small>{tr(ru(r.data.specialization))}</small></span>
                             </label>
                           ))}
                       </div>
@@ -2401,7 +2403,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
                   <Sparkles size={30} />
                 </div>
                 <h1>{tr("Помощник StageOS")}</h1>
-                <p>{tr("Задайте вопрос о театре или предложите новое событие.")}<br />{tr("Модель использует данные StageOS; запись — только после вашего подтверждения.")}</p>
+                <p>{tr("Задайте вопрос о постановках, сотрудниках или расписании.")}<br />{tr("Помощник отвечает по базе выбранного театра. Для создания события откройте «Назначить».")}</p>
                 <textarea
                   value={question}
                   onChange={(e) => setQuestion(e.target.value)}
@@ -2421,7 +2423,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
                     })
                   }
                 >
-                  {tr(busy ? "Модель думает…" : "Спросить")}
+                  {tr(busy ? "Проверяем данные…" : "Спросить")}
                   <ArrowRight size={17} />
                 </button>
                 {tr(answer && <div className="answer">{tr(ru(answer))}</div>)}
@@ -2493,6 +2495,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
             )}
             {page === "Настройки" && settings && (
               <>
+                <button onClick={()=>setShowQualifications(true)}>{tr("Управление квалификациями")}</button>
                 <h1>{tr("Настройки")}</h1>
                 <section className="panel">
                   <h3>{tr("База театра")}</h3>
@@ -2853,6 +2856,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
         </div>
       )}
       {tr(showExport && <ScheduleExport date={calDate} filters={filter} locale={language} onClose={()=>setShowExport(false)}/>)}
+      {showQualifications && <QualificationManager api={api} onClose={()=>{setShowQualifications(false);load();}}/>}
       {resourceEditor && (
         <div className="overlay" onClick={() => setResourceEditor(null)}>
           <section
@@ -2955,6 +2959,17 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
                   }
                 />
               </label>
+              {resourceEditor.kind === "Person" && <fieldset className="qualification-picker">
+                <legend>{tr("Квалификации сотрудника")}</legend><button type="button" onClick={()=>setShowQualifications(true)}>{tr("Управление квалификациями")}</button>
+                <p className="muted">{tr("Выберите только подтверждённые квалификации. Они определяют доступные назначения.")}</p>
+                {[...new Set([...(boot?.qualifications || []), ...(resourceEditor.data?.qualification || [])])].map(q => (
+                  <label key={q}><input type="checkbox" aria-label={tr("Квалификация") + " " + tr(ru(q))}
+                    checked={q === resourceEditor.department || (resourceEditor.data?.qualification || []).includes(q)}
+                    disabled={q === resourceEditor.department}
+                    onChange={e => setResourceEditor({...resourceEditor,data:{...resourceEditor.data,qualification:e.target.checked ? [...new Set([...(resourceEditor.data?.qualification || []),q])] : (resourceEditor.data?.qualification || []).filter((x:string)=>x!==q)}})}
+                  />{tr(ru(q))}</label>
+                ))}
+              </fieldset>}
               {resourceEditor.kind === "Room" && <label className="field"><span>{tr("Площадка помещения")}</span><select required value={resourceEditor.data?.venue_id || 0} onChange={e => setResourceEditor({...resourceEditor,data:{...resourceEditor.data,venue_id:+e.target.value}})}><option value="0">{tr("Выберите площадку")}</option>{resources.filter(r=>r.kind==="Venue").map(r=><option key={r.id} value={r.id}>{r.name}</option>)}</select></label>}
               {tr(["Room","Vehicle"].includes(resourceEditor.kind) && <label className="field"><span>{tr("Вместимость")}</span><input type="number" min={0} value={resourceEditor.data?.capacity ?? ""} onChange={e=>setResourceEditor({...resourceEditor,data:{...resourceEditor.data,capacity:e.target.value === "" ? "" : +e.target.value}})}/></label>)}
               {resourceEditor.kind === "Equipment Kit" && <label className="field"><span>{tr("Имущество комплекта")}</span><select multiple size={6} value={(resourceEditor.data?.items || []).map(String)} onChange={e=>setResourceEditor({...resourceEditor,data:{...resourceEditor.data,items:Array.from(e.target.selectedOptions).map(o=>+o.value)}})}>{resources.filter(r=>r.kind==="Equipment").map(r=><option key={r.id} value={r.id}>{r.name}</option>)}</select></label>}

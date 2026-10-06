@@ -48,9 +48,9 @@ export function EventRoles({
               <option value="" disabled>
                 {tr("Выберите актёра")}
               </option>
-              {people.map((person) => (
-                <option key={person.id} value={person.id}>
-                  {person.name}
+              {[...people].sort((a,b)=>Number(role.eligible_ids.includes(b.id))-Number(role.eligible_ids.includes(a.id)) || a.name.localeCompare(b.name,"ru")).map((person) => (
+                <option key={person.id} value={person.id} data-eligible={role.eligible_ids.includes(person.id)} style={role.eligible_ids.includes(person.id) ? {color:"var(--accent)",fontWeight:600}:undefined}>
+                  {person.name}{role.eligible_ids.includes(person.id) ? tr(" · допущен к роли") : ""}
                   {person.id === role.baseline_id
                     ? tr(" · исходный состав")
                     : role.eligible_ids.length &&
@@ -177,7 +177,7 @@ export function AddStage({
             <input
               type="number"
               min={1}
-              max={1440}
+              max={10080}
               value={form.duration}
               onChange={(e) => field("duration", e.target.value)}
             />
@@ -208,7 +208,7 @@ export function AddStage({
               !form.name.trim() ||
               !form.start ||
               Number(form.duration) < 1 ||
-              Number(form.duration) > 1440
+              Number(form.duration) > 10080
             }
             onClick={async () => {
               const next = await onChange({

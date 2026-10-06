@@ -14,6 +14,6 @@ def test_language_saved_before_initialization_and_reloaded(clean):
 def test_assistant_disabled_returns_requested_language(clean):
     c,_=clean
     answer=c.post('/api/assistant',json={'text':'What happens today?','language':'en'}).json()['answer']
-    assert 'disabled' in answer and 'Scheduling' in answer
-    assert 'отключён' in c.post('/api/assistant',json={'text':'Что сегодня?'}).json()['answer']
+    assert 'No non-cancelled events' in answer
+    assert 'нет неотменённых событий' in c.post('/api/assistant',json={'text':'Что сегодня?'}).json()['answer']
     assert c.post('/api/assistant',json={'text':'Question','language':'unknown'}).status_code==422
