@@ -340,5 +340,5 @@ def create_workspace_app(home=None,static_dir=None,bootstrap_file=None):
         @app.get('/{path:path}')
         def index(path:str):
             if path.startswith('api'):raise HTTPException(404)
-            return FileResponse(static/('stageos-icon.svg' if path=='stageos-icon.svg' else 'index.html'))
+            return FileResponse(static/('stageos-icon.svg' if path=='stageos-icon.svg' else 'index.html'), headers={'Cache-Control':'no-cache'})
     return app

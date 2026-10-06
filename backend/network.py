@@ -24,7 +24,8 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
 from .workspaces import create_workspace_app
-from .tunnel import TunnelController, HEADERS
+from .tunnel import HEADERS
+from .cloudflare_tunnel import InternetTunnelController as TunnelController
 from .mobile import PATHS as MOBILE_PATHS, current_mobile, COOKIE as MOBILE_COOKIE
 
 PROTOCOL = 1
@@ -43,7 +44,7 @@ def validate_address(value):
             raise ValueError()
     except ValueError:
         raise ValueError('Неверный порт сервера')
-    if parts.scheme=='http' and any(parts.hostname.lower().endswith(suffix) for suffix in ('.ngrok-free.dev','.ngrok-free.app','.ngrok.app','.ngrok.io')) and parts.port in (None,80,443):
+    if parts.scheme=='http' and any(parts.hostname.lower().endswith(suffix) for suffix in ('.ngrok-free.dev','.ngrok-free.app','.ngrok.app','.ngrok.io','.trycloudflare.com')) and parts.port in (None,80,443):
         return 'https://' + parts.hostname
     return value
 
@@ -59,7 +60,7 @@ class LanAccess:
             return await self.app(scope, receive, send)
         req = Request(scope)
         if req.url.path == '/api/network/hello' and req.method == 'GET':
-            return await JSONResponse({'product':'StageOS Server','version':'1.0.14','protocol':PROTOCOL,'server_id':self.server_id})(scope, receive, send)
+            return await JSONResponse({'product':'StageOS Server','version':'1.0.15','protocol':PROTOCOL,'server_id':self.server_id})(scope, receive, send)
         if req.url.path.startswith('/api'):
             if req.url.path.startswith('/api/connection'):
                 return await JSONResponse({'detail':'Управление подключением доступно только на компьютере сервера'},403,headers={'X-StageOS-Web':'1'})(scope,receive,send)
@@ -381,10 +382,11 @@ def create_desktop_app(home=None,static_dir=None,bootstrap_file=None):
         with controller.lock:
             try:
                 action=body.get('action')
-                if action=='install':controller.tunnel.install()
+                if action=='select':controller.tunnel.select(body.get('provider'))
+                elif action=='install':controller.tunnel.install()
                 elif action=='start':
                     if not isinstance(body.get('remember',False),bool):raise ValueError('Проверьте настройки подключения')
-                    controller.tunnel.start(body.get('authtoken',''),body.get('remember',False))
+                    controller.tunnel.start(body.get('authtoken',''),body.get('remember',False),body.get('protocol','http2'))
                 elif action=='stop':controller.tunnel.stop()
                 elif action=='forget':controller.tunnel.forget_key()
                 else:raise ValueError('Выберите действие туннеля')

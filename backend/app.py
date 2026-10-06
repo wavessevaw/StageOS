@@ -84,7 +84,7 @@ def create_app(engine=None, static_dir=None, demo_enabled=None):
     with engine.begin() as connection:
         cfg.attributes["connection"] = connection
         command.upgrade(cfg, "head")
-    app = FastAPI(title="StageOS", version="1.0.14")
+    app = FastAPI(title="StageOS", version="1.0.15")
     app.state.Session = Session
     from starlette.middleware.gzip import GZipMiddleware
     app.add_middleware(GZipMiddleware,minimum_size=2048,compresslevel=4)

@@ -657,3 +657,19 @@ Object.assign(english,{"Показ добавлен из афиши. Произ�
 Object.assign(english,{"Год начала сезона":"Season start year","Все месяцы афиши, включая новые":"All programme months, including new ones","Октябрь — декабрь выбранного года, январь — сентябрь следующего. Новые месяцы подхватываются при проверке сайта.":"October–December of the selected year, January–September of the following year. New months are picked up when the website is checked."});
 
 Object.assign(english,{"Проверено по базе театра":"Checked against the theatre database"});
+
+Object.assign(english,{
+"Сервис туннеля":"Tunnel service","Загрузка Cloudflare…":"Downloading Cloudflare…","Установить Cloudflare":"Install Cloudflare","Способ соединения":"Connection method","Совместимый (HTTP/2)":"Compatible (HTTP/2)","Автоматический":"Automatic","Скопировать адрес":"Copy address","Адрес скопирован":"Address copied",
+"Бесплатный туннель Cloudflare. Аккаунт, домен и ключ не нужны. База остаётся на компьютере сервера.":"Free Cloudflare tunnel. No account, domain or key is required. The database stays on the server computer.",
+"Ссылка остаётся одной, пока этот туннель работает. После нового запуска адрес изменится — отправьте пользователям новую ссылку.":"The link stays the same while this tunnel runs. Starting a new tunnel changes the address; share the new link with users.",
+"Доступ без VPN проверьте с телефона через мобильный интернет. Проверка сервера не подтверждает доступность из всех сетей.":"Check access without a VPN from your phone using mobile data. The server check does not confirm access from every network.",
+"Кнопка загрузит проверенный cloudflared с официального GitHub. Установка выполняется один раз.":"This button downloads verified cloudflared from the official GitHub repository. Installation is needed once.",
+"Совместимый режим использует TCP. Если соединение не устанавливается, попробуйте автоматический режим.":"Compatible mode uses TCP. If it cannot connect, try automatic mode.",
+"Для телефона откройте этот адрес в Safari и войдите личным логином и паролем. Для полного интерфейса на ПК также потребуется код подключения сервера.":"On your phone, open this address in Safari and sign in with your login and password. The full desktop interface also requires the server connection code.",
+"Сервер и ПК должны оставаться включёнными. Cloudflare Quick Tunnel не гарантирует постоянную доступность; при новом запуске ссылка меняется.":"Keep the server and computer running. Cloudflare Quick Tunnel has no uptime guarantee; a new start changes the link.",
+"Не удалось скопировать. Выделите адрес и скопируйте вручную.":"Could not copy. Select the address and copy it manually."
+});
+
+Object.assign(english,{"Загрузка StageOS…":"Loading StageOS…"});
+
+Object.assign(english,{"Не удалось загрузить страницу. Проверьте связь и обновите её.":"Could not load the page. Check your connection and reload.","DNS не находит серверы Cloudflare. Проверьте DNS или VPN на компьютере сервера":"DNS cannot find Cloudflare servers. Check DNS or VPN on the server computer","Не удалось соединиться с Cloudflare. Проверьте интернет и способ соединения":"Could not connect to Cloudflare. Check your internet connection and connection method"});

@@ -1,6 +1,5 @@
 import {ImportedEvent} from './ImportedEvent';
 import {productionColor} from './productionColor';
-import {MobileApp} from "./MobileApp";
 import {apiFetch} from "./NetworkFetch";
 import QualificationManager from "./QualificationManager";
 import {HistorySuggestions,SmallModelSettings} from './Suggestions';
@@ -9,7 +8,6 @@ import {saveFile} from './saveFile';
 import {EventRoles,AddStage,removeStage} from './EventPlanEditor';
 import { tr, useLanguage, setLanguage, getLanguage, Language } from "./i18n";
 import React, { useState, useEffect, useRef } from "react";
-import { createRoot } from "react-dom/client";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
@@ -47,15 +45,9 @@ import VenueEditor from "./VenueEditor";
 import ScheduleExport from "./ScheduleExport";
 import {DataValue,ImportedData,isImportedMetadata,importedLabel} from "./ImportedData";
 import { ru } from "./ru";
-import {Recovery} from "./Recovery";
 import {ArtsPeople} from "./ArtsPeople";
 import {Afisha} from "./Afisha";
 type Obj = Record<string, any>;
-const initialToken = new URLSearchParams(location.search).get("token");
-if (initialToken) {
-  sessionStorage.setItem("stageos-token", initialToken);
-  history.replaceState({}, "", location.pathname);
-}
 async function api(path: string, method = "GET", body?: any) {
   const res = await apiFetch("/api" + path, {
     method,
@@ -900,7 +892,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
           )))}
         </nav>
         <div className="sidebar-bottom">
-          <DatabaseLocation/><small>StageOS · 1.0.14</small>
+          <DatabaseLocation/><small>StageOS · 1.0.15</small>
         </div>
       </aside>
       <main>
@@ -3066,5 +3058,6 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
     </div>
   );
 }
-const personalMobile = location.pathname.startsWith("/mobile") || (!sessionStorage.getItem("stageos-token") && (window.matchMedia("(max-width: 760px)").matches || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)));
-createRoot(document.getElementById("root")!).render(<Recovery>{personalMobile ? <MobileApp/> : <AccountGate>{(account,exit)=><App key={account?.theatre.id+":"+account?.user.id} account={account} exit={exit}/>}</AccountGate>}</Recovery>);
+export default function DesktopApp(){
+ return <AccountGate>{(account,exit)=><App key={account?.theatre.id+":"+account?.user.id} account={account} exit={exit}/>}</AccountGate>;
+}

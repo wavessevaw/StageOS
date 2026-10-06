@@ -73,7 +73,7 @@ def parse(html, year=2026, months=None):
 
 def fetch_programme(year,months):
     with httpx.Client(timeout=15,follow_redirects=False) as client:
-        with client.stream('GET',URL,headers={'User-Agent':'StageOS/1.0.14 programme-import'}) as response:
+        with client.stream('GET',URL,headers={'User-Agent':'StageOS/1.0.15 programme-import'}) as response:
             response.raise_for_status();chunks=[];size=0
             for chunk in response.iter_bytes():
                 size+=len(chunk)
