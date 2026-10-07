@@ -673,3 +673,4 @@ Object.assign(english,{
 Object.assign(english,{"Загрузка StageOS…":"Loading StageOS…"});
 
 Object.assign(english,{"Не удалось загрузить страницу. Проверьте связь и обновите её.":"Could not load the page. Check your connection and reload.","DNS не находит серверы Cloudflare. Проверьте DNS или VPN на компьютере сервера":"DNS cannot find Cloudflare servers. Check DNS or VPN on the server computer","Не удалось соединиться с Cloudflare. Проверьте интернет и способ соединения":"Could not connect to Cloudflare. Check your internet connection and connection method"});
+Object.assign(english,{"Выберите любую дату и время. Связи с другими этапами необязательны.":"Choose any date and time. Dependencies on other stages are optional."});

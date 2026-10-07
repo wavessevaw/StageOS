@@ -21,15 +21,16 @@ test("Selective rehearsal staff and note", async ({ page, request }) => {
   expect(box && text && text.x >= box.x && text.x + text.width <= box.x + box.width + 1).toBeTruthy();
   await section.getByRole("button", { name: "Звук", exact: true }).click();
   await section.locator(".rehearsal-person input[type=checkbox]").first().check();
-  await page
-    .getByLabel("Примечание к событию", { exact: true })
-    .fill("Балет и звук. Только выбранные люди.");
   await page.getByLabel("Дата", { exact: true }).fill("2026-12-18");
   await page
     .getByRole("button", { name: "Проверить и назначить", exact: true })
     .click();
   const modal = page.getByRole("dialog", { name: "Предварительный план" });
   await expect(modal).toBeVisible();
+  const note = modal.getByLabel("Примечание к событию", { exact: true });
+  await note.fill("Балет и звук. Только выбранные люди.");
+  await note.press('Tab');
+  await expect(modal.getByRole("button", { name: "Подтвердить", exact: true })).toBeEnabled();
   await modal.getByRole("button", { name: "Подтвердить", exact: true }).click();
   await expect(modal).not.toBeVisible();
   const events = await (

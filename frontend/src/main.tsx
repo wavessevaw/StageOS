@@ -623,6 +623,9 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
             <span>{tr("Примечание к событию")}</span>
             <textarea
               key={p.fingerprint + "notes"}
+              maxLength={8000}
+              disabled={busy}
+              placeholder={tr("Пометки для помрежа и служб")}
               defaultValue={p.request.notes || ""}
               onBlur={(e) => {
                 if (e.target.value !== (p.request.notes || ""))
@@ -747,10 +750,11 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
                   onChange={(e) =>
                     changePlan(p, {
                       run_through: e.target.checked,
-                      task_overrides: {}, removed_tasks:[], extra_tasks:[],
+                      task_overrides: Object.fromEntries(Object.entries(p.request.task_overrides || {}).filter(([name]) => !["Прогон","Обед","Сбор перед спектаклем"].includes(name))), removed_tasks:(p.request.removed_tasks || []).filter((name:string)=>!["Прогон","Обед","Сбор перед спектаклем"].includes(name)),
+                      extra_tasks:(p.request.extra_tasks || []).map((task:Obj)=>({...task,after:!e.target.checked && ["Прогон","Обед","Сбор перед спектаклем"].includes(task.after)?null:task.after,before:!e.target.checked && ["Прогон","Обед","Сбор перед спектаклем"].includes(task.before)?null:task.before})),
                     })
                   }
-                />{tr("Базовый план: прогон, обед и сбор перед спектаклем")}</label>
+                />{tr("Прогон на площадке в день спектакля (начало в 11:00)")}</label>
             ))}
             <p className="muted">{tr("Укажите дату и время каждого этапа, включая предыдущие дни. Измените начало или длительность этапа: зависимости и занятость пересчитываются. Начало и общую продолжительность спектакля с антрактами можно изменить; занятость пересчитывается. Явно заданные времена отмечены как закреплённые.")}</p>
             <AddStage key={p.request.production_id+":"+p.start} plan={p} busy={busy} onChange={changes=>changePlan(p,changes)}/>
@@ -767,7 +771,7 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
                       const value=e.target.value;
                       e.target.value=t.start.slice(0,16);
                       if (value && value !== t.start.slice(0,16)) {
-                        if (["Спектакль", "Репетиция"].includes(t.name))
+                        if (["Спектакль", "Репетиция"].includes(t.name) && !t.custom)
                           changePlan(p, { start: value });
                         else
                           changePlan(p, {
@@ -785,8 +789,8 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
                   <input
                     aria-label={"Длительность " + t.name}
                     type="number"
-                    min={["Спектакль","Репетиция"].includes(t.name) ? 15 : 1}
-                    max={["Спектакль","Репетиция"].includes(t.name) ? 480 : 10080}
+                    min={(["Спектакль","Репетиция"].includes(t.name) && !t.custom) ? 15 : 1}
+                    max={(["Спектакль","Репетиция"].includes(t.name) && !t.custom) ? 480 : 10080}
                     defaultValue={Math.round(
                       (+new Date(t.end) - +new Date(t.start)) / 60000,
                     )}
@@ -795,13 +799,13 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
                       const n = +e.target.value;
                       e.target.value=String(Math.round((+new Date(t.end)-+new Date(t.start))/60000));
                       if (
-                        Number.isInteger(n) && n >= (["Спектакль","Репетиция"].includes(t.name) ? 15 : 1) && n <= (["Спектакль","Репетиция"].includes(t.name) ? 480 : 10080) &&
+                        Number.isInteger(n) && n >= ((["Спектакль","Репетиция"].includes(t.name) && !t.custom) ? 15 : 1) && n <= ((["Спектакль","Репетиция"].includes(t.name) && !t.custom) ? 480 : 10080) &&
                         n !==
                           Math.round(
                             (+new Date(t.end) - +new Date(t.start)) / 60000,
                           )
                       ) {
-                        if (["Спектакль","Репетиция"].includes(t.name))
+                        if ((["Спектакль","Репетиция"].includes(t.name) && !t.custom))
                           changePlan(p, { duration: n });
                         else
                           changePlan(p, {
@@ -1089,25 +1093,6 @@ function App({account,exit}:{account?:Obj|null;exit?:()=>Promise<void>}) {
                       ))}
                     </div>
                   )}
-                  {tr(form.kind !== "Репетиция" && (
-                    <label className="row">
-                      <input
-                        type="checkbox"
-                        checked={!!form.run_through}
-                        onChange={(e) =>
-                          update("run_through", e.target.checked)
-                        }
-                      />{tr("Прогон на площадке в день спектакля (начало в 11:00)")}</label>
-                  ))}
-                  <label className="field">
-                    <span>{tr("Примечание к событию")}</span>
-                    <textarea
-                      maxLength={8000}
-                      value={form.notes || ""}
-                      onChange={(e) => update("notes", e.target.value)}
-                      placeholder={tr("Пометки для помрежа и служб")}
-                    />
-                  </label>
                   <div className="assign-footer">
                     <label>
                       <input

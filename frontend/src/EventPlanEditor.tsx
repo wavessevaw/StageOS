@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { tr } from "./i18n";
+import { ru } from "./ru";
 type Obj = Record<string, any>;
 export function EventRoles({
   plan,
@@ -88,7 +89,6 @@ export function AddStage({
   onChange: (changes: Obj) => Promise<any> | void;
 }) {
   const [open, setOpen] = useState(false);
-  const main = plan.request.kind === "Репетиция" ? "Репетиция" : "Спектакль";
   const [form, setForm] = useState({
     name: "",
     department: "Все",
@@ -101,8 +101,13 @@ export function AddStage({
     })(),
     duration: "30",
     after: "",
-    before: plan.tasks.some((t: Obj) => t.name === main) ? main : "",
+    before: "",
   });
+  const availableNames = JSON.stringify(plan.tasks.map((t: Obj) => t.name));
+  useEffect(() => {
+    const names: string[] = JSON.parse(availableNames);
+    setForm(f => ({...f, after: names.includes(f.after) ? f.after : "", before: names.includes(f.before) ? f.before : ""}));
+  }, [availableNames]);
   const field = (key: string, value: string) =>
     setForm((f) => ({ ...f, [key]: value }));
   return (
@@ -129,6 +134,7 @@ export function AddStage({
       </div>
       {open && (
         <div className="extra-stage-form">
+          <p className="muted">{tr("Выберите любую дату и время. Связи с другими этапами необязательны.")}</p>
           <label className="field">
             <span>{tr("Название этапа")}</span>
             <input
@@ -189,13 +195,14 @@ export function AddStage({
             <label className="field" key={key}>
               <span>{tr(label)}</span>
               <select
+                aria-label={tr(label)}
                 value={(form as Obj)[key]}
                 onChange={(e) => field(key, e.target.value)}
               >
                 <option value="">{tr("Без зависимости")}</option>
                 {plan.tasks.map((t: Obj) => (
                   <option value={t.name} key={t.name}>
-                    {t.name}
+                    {ru(t.name)}
                   </option>
                 ))}
               </select>
@@ -217,8 +224,8 @@ export function AddStage({
                   {
                     ...form,
                     duration: Number(form.duration),
-                    after: form.after || null,
-                    before: form.before || null,
+                    after: plan.tasks.some((t: Obj) => t.name === form.after) ? form.after : null,
+                    before: plan.tasks.some((t: Obj) => t.name === form.before) ? form.before : null,
                   },
                 ],
               });

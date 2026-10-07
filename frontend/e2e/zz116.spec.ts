@@ -1,0 +1,24 @@
+import {test,expect} from '@playwright/test';
+test('Free stages have optional dependencies and assignment contains notes',async({page})=>{
+ await page.goto('/');
+ const demo=page.getByRole('button',{name:'Создать демонстрационный театр'});
+ await expect(demo.or(page.getByRole('heading',{name:'Поднимем занавес.'}))).toBeVisible({timeout:60000});
+ if(await demo.isVisible())await demo.click();
+ await expect(page.getByRole('heading',{name:'Поднимем занавес.'})).toBeVisible();
+ await expect(page.getByLabel('Примечание к событию',{exact:true})).toHaveCount(0);
+ await page.getByLabel('Дата',{exact:true}).fill('2027-06-18');
+ await page.getByRole('button',{name:'Проверить и назначить'}).click();
+ const dialog=page.getByRole('dialog',{name:'Предварительный план'});
+ await expect(dialog).toBeVisible();
+ await dialog.getByRole('button',{name:'Добавить этап',exact:true}).click();
+ const before=dialog.getByLabel('До этапа',{exact:true});
+ await expect(before).toHaveValue('');
+ await before.selectOption('Спектакль');
+ await dialog.getByRole('button',{name:'Удалить этап Спектакль',exact:true}).click();
+ await expect(before).toHaveValue('');
+ await dialog.getByLabel('Название этапа',{exact:true}).fill('Свободный этап');
+ await dialog.getByLabel('Начало нового этапа').fill('2027-08-20T09:00');
+ await dialog.getByRole('button',{name:'Добавить в план и проверить'}).click();
+ await expect(dialog.getByLabel('Начало Свободный этап',{exact:true})).toHaveValue('2027-08-20T09:00');
+ expect(await dialog.evaluate(e=>e.scrollWidth<=e.clientWidth+2)).toBeTruthy();
+});

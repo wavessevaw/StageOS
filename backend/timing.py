@@ -27,8 +27,6 @@ def retime(tasks, overrides, start, run_through=False, dependencies=None):
     anchors = [start] + [t['start'] for t in tasks] + [t['end'] for t in tasks]
     anchors += [edit.start for edit in overrides.values() if edit.start is not None]
     earliest, latest = min(anchors), max(anchors)
-    if latest - earliest > timedelta(days=31):
-        raise ValueError('Производственный план должен укладываться в 31 день')
     # Include explicit anchors, long tasks and upstream preparation in the domain.
     padding = sum(durations.values()) + 1440
     origin = earliest.replace(second=0, microsecond=0) - timedelta(minutes=padding)
@@ -69,7 +67,7 @@ def retime(tasks, overrides, start, run_through=False, dependencies=None):
         dur=durations[n]
         a=model.new_int_var(0,horizon,n); b=model.new_int_var(0,horizon,n+'_end')
         starts[n]=a; ends[n]=b; intervals[n]=model.new_interval_var(a,dur,b,n)
-        if n in ['Спектакль','Репетиция']:
+        if n in ['Спектакль','Репетиция'] and not t.get('custom'):
             model.add(a==baseline[n])
             if edit: raise ValueError('Время основного события изменяется в форме назначения')
         elif n=='Прогон' and not (edit and edit.start is not None):
@@ -96,7 +94,7 @@ def customize(tasks,removed,extra):
     if gone-original:raise ValueError('Неизвестный удаляемый этап')
     added=[t.name for t in extra]
     # Lunch may also be added explicitly to a plan without a run-through.
-    if len(set(added))!=len(added) or set(added)&(original|(set(DEPS)-{'Обед'})):
+    if len(set(added))!=len(added) or set(added)&(original-gone):
         raise ValueError('Названия дополнительных этапов должны быть уникальны. Удалённый стандартный этап можно восстановить.')
     names=(original-gone)|set(added)
     def upstream(name,seen=None):
